@@ -12,7 +12,40 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <time.h>
+
+class DevRand
+{
+public:
+	DevRand()
+	{
+		m_fd = open("/dev/random", O_RDONLY);
+	}
+	void FillRandBytes(unsigned char* out, int size)
+	{
+		int bytes_read = 0;
+		int total_read = 0;
+		do
+		{
+			bytes_read = read(m_fd, &out[total_read], size);
+			if(bytes_read <= 0)
+				return;
+			total_read += bytes_read;
+		}
+		while(total_read < size && bytes_read > 0 && bytes_read == size);
+
+	}
+
+	~DevRand()
+	{
+		close(m_fd);
+	}
+private:
+	int m_fd;
+};
 
 class FrameTimer
 {
@@ -112,9 +145,8 @@ void SDLProgram::Init()
 		SDL_ClearError();
 	}
 
-	m_pScreenSurface = SDL_CreateRGBSurface(0, m_screenwidth, m_screenheight, 32, 0, 0, 0, 0);
+	m_pScreenSurface = SDL_CreateRGBSurfaceWithFormat(0, m_screenwidth, m_screenheight, 32, SDL_PIXELFORMAT_ARGB8888);
 	m_pSurfaceTexture = SDL_CreateTextureFromSurface(m_pRenderer, m_pScreenSurface);
-
 }
 
 void SDLProgram::Teardown()
@@ -142,6 +174,8 @@ void SDLProgram::Teardown()
 
 void SDLProgram::Run()
 {
+	srand(time(0));
+
 	m_bRunning = true;
 	this->Init();
 
@@ -159,11 +193,12 @@ void SDLProgram::Run()
 	std::vector<unsigned int> pixeldat(pixelcount);
 
 	memset(&pixeldat[0], 0xFF, pixelcount);
+	DevRand rng;
+	rng.FillRandBytes(reinterpret_cast<unsigned char*>(&pixeldat[0]), sizeof(unsigned int) * pixelcount);
 
-	for(unsigned int idx = 0; idx < pixelcount; ++idx)
+	for(int idx = 0; idx < pixelcount; ++idx)
 	{
-		if(idx & 1)
-			pixeldat[idx] = 0xFF000000;
+		pixeldat[idx] = pixeldat[idx] > 0xF0000000 ? 0xFF000000 : 0xFFFFFFFF;
 	}
 
 	FrameTimer stopwatch;
@@ -172,18 +207,16 @@ void SDLProgram::Run()
 	while(m_bRunning)
 	{
 
-		memset(&pixeldat[0], 0xFF, pixelcount);
+		/* Begin Draw Code */
+		//rng.FillRandBytes(reinterpret_cast<unsigned char*>(&pixeldat[0]), sizeof(unsigned int) * pixelcount);
+		/* End Draw Code */
 
-		for(unsigned int idx = 0; idx < pixelcount; ++idx)
-		{
-			if(idx & 1)
-				pixeldat[idx] = 0xFF000000;
-		}
-
-		SDL_UpdateTexture(m_pSurfaceTexture, 0, &pixeldat[0], 4);
+		/* Update window surface with updated texture */
+		SDL_UpdateTexture(m_pSurfaceTexture, 0, &pixeldat[0], 4*m_screenwidth);
 		SDL_RenderCopy(m_pRenderer, m_pSurfaceTexture, 0, 0);
 		SDL_RenderPresent(m_pRenderer);
 
+		/* Poll for and handle GUI events */
 		while(SDL_PollEvent(&ev))
 		{
 			switch(ev.type)
@@ -198,6 +231,7 @@ void SDLProgram::Run()
 				break;
 			}
 		}
+
 		/* Compute FPS for this frame */
 		stopwatch.MarkTime();
 	}
@@ -267,6 +301,8 @@ bool SDLLibraryHelper::InitLibrary()
 	m_bLibraryStarted = (0 == SDL_Init(SDL_INIT_VIDEO));
 	return m_bLibraryStarted;
 }
+
+
 
 int main(void)
 {
