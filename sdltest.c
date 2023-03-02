@@ -110,7 +110,6 @@ bool SDLProgram::CreateWindow(unsigned int width, unsigned int height)
 
 void SDLProgram::Init()
 {
-
 	int renderdriver_count = SDL_GetNumRenderDrivers();
 	printf("There are %d render drivers.\n", renderdriver_count);
 
@@ -172,6 +171,35 @@ void SDLProgram::Teardown()
 	}
 }
 
+bool IsCellOn(unsigned int v)
+{
+	return v == 0xFF000000;
+}
+
+void life(
+   int *input,
+   int* output,
+   int i,
+   const int height,
+   const int width)
+{
+   int rowUp = i - width;
+   int rowDown = i + width;
+   bool outOfBounds = (i < width);
+   outOfBounds |= (i > (width * (height-1)));
+   outOfBounds |= (i % width == 0);
+   outOfBounds |= (i % width == width-1);
+   if (outOfBounds) { output[i] = 0xFFFFFFFF; return; }
+   int neighbours = IsCellOn(input[rowUp-1]) + IsCellOn(input[rowUp]) + IsCellOn(input[rowUp+1]);
+   neighbours += IsCellOn(input[i-1]) + IsCellOn(input[i+1]);
+   neighbours += IsCellOn(input[rowDown-1]) + IsCellOn(input[rowDown]) + IsCellOn(input[rowDown+1]);
+   if (neighbours == 3 || (IsCellOn(input[i]) && neighbours == 2))
+       output[i] = 0xFF000000;
+   else
+       output[i] = 0xFFFFFFFF;
+}
+
+
 void SDLProgram::Run()
 {
 	srand(time(0));
@@ -191,14 +219,14 @@ void SDLProgram::Run()
 
 	unsigned int pixelcount = (m_screenwidth*m_screenheight);
 	std::vector<unsigned int> pixeldat(pixelcount);
-
+	std::vector<unsigned int> pixeldat_backing(pixelcount);
+	/* Create initial texture state */
 	memset(&pixeldat[0], 0xFF, pixelcount);
 	DevRand rng;
 	rng.FillRandBytes(reinterpret_cast<unsigned char*>(&pixeldat[0]), sizeof(unsigned int) * pixelcount);
-
-	for(int idx = 0; idx < pixelcount; ++idx)
+	for(unsigned int idx = 0; idx < pixelcount; ++idx)
 	{
-		pixeldat[idx] = pixeldat[idx] > 0xF0000000 ? 0xFF000000 : 0xFFFFFFFF;
+		pixeldat[idx] = pixeldat[idx] > 0x80000000 ? 0xFF000000 : 0xFFFFFFFF;
 	}
 
 	FrameTimer stopwatch;
@@ -208,7 +236,13 @@ void SDLProgram::Run()
 	{
 
 		/* Begin Draw Code */
-		//rng.FillRandBytes(reinterpret_cast<unsigned char*>(&pixeldat[0]), sizeof(unsigned int) * pixelcount);
+		for(unsigned int idx = 0; idx < pixelcount; ++idx)
+		{
+			life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
+			//memcpy(&pixeldat[0], &pixeldat_backing[0], pixeldat.size() * sizeof(unsigned int));
+
+		}
+		pixeldat.swap(pixeldat_backing);
 		/* End Draw Code */
 
 		/* Update window surface with updated texture */
@@ -315,7 +349,7 @@ int main(void)
 	printf("SDL Initialization %s.\n",
 		result ? "success" : "failure");
 
-	SDLProgram prog(true);
+	SDLProgram prog(false);
 	prog.CreateWindow(768, 768);
 	prog.Run();
 
