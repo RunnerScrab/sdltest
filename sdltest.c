@@ -4,18 +4,20 @@
 #include <SDL_render.h>
 #include <SDL_error.h>
 
+
+
 #include <vector>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-
+#include <time.h>
 
 class SDLProgram
 {
 public:
-	SDLProgram();
+	SDLProgram(bool bVsync = true);
 	~SDLProgram();
 	bool CreateWindow(unsigned int width, unsigned int height);
 	void Run();
@@ -31,6 +33,8 @@ private:
 	SDL_Texture* m_pSurfaceTexture = 0;
 
 	unsigned int m_screenwidth = 0, m_screenheight = 0;
+
+	bool m_bVsync;
 };
 
 bool SDLProgram::CreateWindow(unsigned int width, unsigned int height)
@@ -60,12 +64,20 @@ void SDLProgram::Init()
 	}
 
 	SDL_ClearError();
-	m_pRenderer = SDL_CreateRenderer(m_pWindow, -1,
-					SDL_RENDERER_ACCELERATED);
+
+	int render_flags = SDL_RENDERER_ACCELERATED;
+
+	if(m_bVsync)
+	{
+		render_flags |= SDL_RENDERER_PRESENTVSYNC;
+	}
+
+	m_pRenderer = SDL_CreateRenderer(m_pWindow, -1, render_flags);
+	int vsync_succ = SDL_RenderSetVSync(m_pRenderer, m_bVsync);
 
 	if(m_pRenderer)
 	{
-		printf("Renderer created.\n");
+		printf("Renderer created %s vsync.\n", (!vsync_succ && m_bVsync) ? "with" : "without");
 	}
 	else
 	{
@@ -81,7 +93,6 @@ void SDLProgram::Init()
 void SDLProgram::Teardown()
 {
 	printf("Teardown\n");
-
 
 	if(m_pSurfaceTexture)
 	{
@@ -128,9 +139,21 @@ void SDLProgram::Run()
 			pixeldat[idx] = 0xFF000000;
 	}
 
+	struct timespec ts1 = {0}, ts2 = {0};
+	double td = 0.0;
+	clock_gettime(CLOCK_REALTIME, &ts1);
+
 	printf("Entering loop\n");
 	while(m_bRunning)
 	{
+
+		memset(&pixeldat[0], 0xFF, pixelcount);
+
+		for(unsigned int idx = 0; idx < pixelcount; ++idx)
+		{
+			if(idx & 1)
+				pixeldat[idx] = 0xFF000000;
+		}
 
 		SDL_UpdateTexture(m_pSurfaceTexture, 0, &pixeldat[0], 4);
 		SDL_RenderCopy(m_pRenderer, m_pSurfaceTexture, 0, 0);
@@ -143,16 +166,26 @@ void SDLProgram::Run()
 			case SDL_QUIT:
 				m_bRunning = false;
 				break;
+			case SDL_KEYUP:
+				printf("td: %f frames: %f\n", td, 1.0/td);
+				break;
 			default:
 				break;
 			}
 		}
+
+		clock_gettime(CLOCK_REALTIME, &ts2);
+
+		td = ((static_cast<double>(ts2.tv_sec)*1.0E9 + ts2.tv_nsec) -
+			(static_cast<double>(ts1.tv_sec)*1.0E9 + ts1.tv_nsec))/1.0E9;
+
+		ts1 = ts2;
 	}
 
 	this->Teardown();
 }
 
-SDLProgram::SDLProgram()
+SDLProgram::SDLProgram(bool bVsync) : m_bVsync(bVsync)
 {
 
 }
@@ -225,7 +258,7 @@ int main(void)
 	printf("SDL Initialization %s.\n",
 		result ? "success" : "failure");
 
-	SDLProgram prog;
+	SDLProgram prog(true);
 	prog.CreateWindow(768, 768);
 	prog.Run();
 
