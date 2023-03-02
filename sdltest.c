@@ -14,6 +14,33 @@
 
 #include <time.h>
 
+class FrameTimer
+{
+public:
+	FrameTimer()
+	{
+		memset(&ts1, 0, sizeof(struct timespec));
+		memset(&ts2, 0, sizeof(struct timespec));
+		clock_gettime(CLOCK_REALTIME, &ts1);
+	}
+	void MarkTime()
+	{
+		/* Call this once every frame */
+		clock_gettime(CLOCK_REALTIME, &ts2);
+		fps = 1.0E9/((static_cast<double>(ts2.tv_sec)*1.0E9 + ts2.tv_nsec) -
+			(static_cast<double>(ts1.tv_sec)*1.0E9 + ts1.tv_nsec));
+		ts1 = ts2;
+	}
+
+	double GetFPS() const
+	{
+		return fps;
+	}
+private:
+	struct timespec ts1, ts2;
+	double fps;
+};
+
 class SDLProgram
 {
 public:
@@ -139,9 +166,7 @@ void SDLProgram::Run()
 			pixeldat[idx] = 0xFF000000;
 	}
 
-	struct timespec ts1 = {0}, ts2 = {0};
-	double td = 0.0;
-	clock_gettime(CLOCK_REALTIME, &ts1);
+	FrameTimer stopwatch;
 
 	printf("Entering loop\n");
 	while(m_bRunning)
@@ -167,23 +192,19 @@ void SDLProgram::Run()
 				m_bRunning = false;
 				break;
 			case SDL_KEYUP:
-				printf("td: %f frames: %f\n", td, 1.0/td);
+				printf("FPS: %f\n", stopwatch.GetFPS());
 				break;
 			default:
 				break;
 			}
 		}
-
-		clock_gettime(CLOCK_REALTIME, &ts2);
-
-		td = ((static_cast<double>(ts2.tv_sec)*1.0E9 + ts2.tv_nsec) -
-			(static_cast<double>(ts1.tv_sec)*1.0E9 + ts1.tv_nsec))/1.0E9;
-
-		ts1 = ts2;
+		/* Compute FPS for this frame */
+		stopwatch.MarkTime();
 	}
 
 	this->Teardown();
 }
+
 
 SDLProgram::SDLProgram(bool bVsync) : m_bVsync(bVsync)
 {
