@@ -3,9 +3,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
-
-DevRand::DevRand()
+DevRand::DevRand() : RandProvider()
 {
 	m_fd = open("/dev/random", O_RDONLY);
 }
@@ -29,4 +29,17 @@ void DevRand::FillRandBytes(unsigned char* out, int size)
 		}
 		while(total_read < size && bytes_read > 0 && bytes_read == size);
 
+}
+
+SeededRand::SeededRand(unsigned int seed) : m_seed(seed)
+{
+	srand(seed);
+}
+
+void SeededRand::FillRandBytes(unsigned char* out, int size)
+{
+	for(int idx = 0; idx < size; ++idx)
+	{
+		out[idx] = rand() & 255;
+	}
 }

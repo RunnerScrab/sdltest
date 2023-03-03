@@ -1,7 +1,7 @@
 #ifndef LIFESCALAR_H_
 #define LIFESCALAR_H_
 
-void life(
+bool life(
    int* input,
    int* output,
    int i,

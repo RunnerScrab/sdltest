@@ -141,12 +141,13 @@ void SDLProgram::Run()
 
 	/* Create initial texture state */
 
-	DevRand rng;
-	rng.FillRandBytes(reinterpret_cast<unsigned char*>(&pixeldat[0]), sizeof(unsigned int) * pixelcount);
+	RandProvider* rng = new SeededRand(0xFEEDFACE);
+	rng->FillRandBytes(reinterpret_cast<unsigned char*>(&pixeldat[0]), sizeof(unsigned int) * pixelcount);
 	for(unsigned int idx = 0; idx < pixelcount; ++idx)
 	{
 		pixeldat[idx] = (pixeldat[idx] > 0x7FFFFFFF) ?  0xFFFFFFFF : 0xFF000000;
 	}
+	delete rng;
 
 	printf("Entering loop\n");
 	while(m_bRunning)
