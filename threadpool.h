@@ -56,11 +56,6 @@ public:
 		return m_bIsRunning;
 	}
 
-	int WaitOnQueueCond()
-	{
-		return pthread_cond_wait(&m_wakecond, &m_taskqueuemutex);
-	}
-
 	Task* GetNextQueuedTask()
 	{
 		Task* pTask =  m_taskqueue.front();
@@ -68,29 +63,11 @@ public:
 		return pTask;
 	}
 
-	void WaitForAllCurrentTasks(unsigned int count)
-	{
-		while(true)
-		{
-			for(LockResultMutex();
-			    count > m_result_count && GetIsRunning();)
-			{
-				if(0 != pthread_cond_wait(&m_resultcond, &m_resultmutex))
-				{
-					UnlockResultMutex();
-					return;
-				}
-			}
-			if(!GetIsRunning())
-				break;
-			unsigned int newcount = m_result_count;
-			UnlockResultMutex();
+	void WaitForAllCurrentTasks(unsigned int count);
 
-			if(newcount == count)
-			{
-				break;
-			}
-		}
+	int WaitOnQueueCond()
+	{
+		return pthread_cond_wait(&m_wakecond, &m_taskqueuemutex);
 	}
 
 	void SignalWakeCond()
@@ -114,6 +91,11 @@ public:
 	void UnlockResultMutex()
 	{
 		pthread_mutex_unlock(&m_resultmutex);
+	}
+
+	int WaitOnResultCond()
+	{
+		return pthread_cond_wait(&m_resultcond, &m_resultmutex);
 	}
 
 	void SignalResultCond()
@@ -150,16 +132,6 @@ private:
 
 	pthread_mutex_t m_taskqueuemutex;
 	std::deque<Task*> m_taskqueue;
-};
-
-class HelloTask : public Task
-{
-	public:
-	HelloTask(){}
-	void operator()()
-	{
-		printf("Hello!\n");
-	}
 };
 
 #endif /* THREADPOOL_H_ */
