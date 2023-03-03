@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <time.h>
 #include <unistd.h>
+#include <atomic>
 
 class Task
 {
@@ -17,6 +18,10 @@ public:
 	virtual ~Task(){}
 	virtual void operator()()
 	{
+	}
+	virtual bool ShouldDelete()
+	{
+		return false;
 	}
 };
 
@@ -63,16 +68,81 @@ public:
 		return pTask;
 	}
 
+	void WaitForAllCurrentTasks(unsigned int count)
+	{
+		while(true)
+		{
+			for(LockResultMutex();
+			    count > m_result_count && GetIsRunning();)
+			{
+				if(0 != pthread_cond_wait(&m_resultcond, &m_resultmutex))
+				{
+					UnlockResultMutex();
+					return;
+				}
+			}
+			if(!GetIsRunning())
+				break;
+			unsigned int newcount = m_result_count;
+			UnlockResultMutex();
+
+			if(newcount == count)
+			{
+				break;
+			}
+		}
+	}
+
+	void SignalWakeCond()
+	{
+		pthread_cond_signal(&m_wakecond);
+	}
+
 	void AddTask(Task* pTask)
 	{
 		LockTaskQueue();
 		m_taskqueue.push_back(pTask);
 		UnlockTaskQueue();
-		pthread_cond_signal(&m_wakecond);
+		SignalWakeCond();
 	}
 
+	void LockResultMutex()
+	{
+		pthread_mutex_lock(&m_resultmutex);
+	}
+
+	void UnlockResultMutex()
+	{
+		pthread_mutex_unlock(&m_resultmutex);
+	}
+
+	void SignalResultCond()
+	{
+		pthread_cond_signal(&m_resultcond);
+	}
+
+	void ResetResultCount()
+	{
+		LockResultMutex();
+		m_result_count = 0;
+		UnlockResultMutex();
+	}
+	void IncrementResultCount()
+	{
+		LockResultMutex();
+		++m_result_count;
+		UnlockResultMutex();
+	}
+	int GetMaxThreads() const
+	{
+		return m_thread_count;
+	}
 private:
 	bool m_bIsRunning;
+
+	unsigned int m_result_count;
+	pthread_cond_t m_resultcond;
+	pthread_mutex_t m_resultmutex;
 
 	unsigned int m_thread_count;
 	std::vector<pthread_t> m_pthreads;

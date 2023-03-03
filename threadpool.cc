@@ -1,8 +1,8 @@
 #include "threadpool.h"
-
 static void* ThreadPool_Worker(void* pArg)
 {
-	ThreadPool* pTP = (ThreadPool*) pArg;
+	ThreadPool* pTP = reinterpret_cast<ThreadPool*>(pArg);
+
 	while(1)
 	{
 		for(pTP->LockTaskQueue();
@@ -26,11 +26,15 @@ static void* ThreadPool_Worker(void* pArg)
 		Task* pTask = pTP->GetNextQueuedTask();
 		pTP->UnlockTaskQueue();
 
-		if(pTask)
-		{
+		if(pTask) {
 			//Run the task
 			(*pTask)();
-			delete pTask;
+			pTP->IncrementResultCount();
+			pTP->SignalResultCond();
+			if(pTask->ShouldDelete())
+			{
+				delete pTask;
+			}
 		}
 
 
@@ -51,6 +55,9 @@ ThreadPool::ThreadPool()
     {
         pthread_create(&(m_pthreads[idx]), 0, ThreadPool_Worker, this);
     }
+
+    pthread_cond_init(&m_resultcond, 0);
+    pthread_mutex_init(&m_resultmutex, 0);
 }
 
 ThreadPool::~ThreadPool()
@@ -60,6 +67,10 @@ ThreadPool::~ThreadPool()
     {
         pthread_join(m_pthreads[idx], 0);
     }
+
+    pthread_mutex_destroy(&m_resultmutex);
+    pthread_cond_destroy(&m_resultcond);
+
     pthread_cond_destroy(&m_wakecond);
     pthread_mutex_destroy(&m_taskqueuemutex);
 }

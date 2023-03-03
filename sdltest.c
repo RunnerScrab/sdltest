@@ -5,6 +5,7 @@
 #include <SDL_error.h>
 
 #include <vector>
+#include <atomic>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,6 +48,8 @@ private:
 	bool m_bVsync;
 
 	ThreadPool m_threadpool;
+
+	pthread_mutex_t m_outputbuffer_mutex;
 };
 
 bool SDLProgram::CreateWindow(unsigned int width, unsigned int height)
@@ -100,6 +103,8 @@ void SDLProgram::Init()
 	m_pSurfaceTexture = SDL_CreateTextureFromSurface(m_pRenderer, m_pScreenSurface);
 
 	SDL_SetRenderTarget(m_pRenderer, m_pSurfaceTexture);
+
+	pthread_mutex_init(&m_outputbuffer_mutex, 0);
 }
 
 void SDLProgram::Teardown()
@@ -125,6 +130,7 @@ void SDLProgram::Teardown()
 	}
 
 	m_threadpool.StopThreadPool();
+	pthread_mutex_destroy(&m_outputbuffer_mutex);
 }
 
 
@@ -137,19 +143,36 @@ CGOLTask(unsigned int* input, unsigned int* output, int startindex, int size, in
 		m_height(height), m_width(width)
 
 	{
-
+		printf("Segment starting at %d with size %d\n", startindex, size);
+		m_segmentresult.resize(width * height);
 	}
 	virtual void operator()() override
 	{
-		life((int*) m_pInput, (int*) m_pOutput, m_index, m_height, m_width);
+		for(int idx = m_index; idx < (m_size + m_index - 1); ++idx)
+		{
+			life((int*) m_pInput, (int*) &m_segmentresult[0], idx, m_height, m_width);
+		}
+	}
+	virtual bool ShouldDelete() { return false; }
+	unsigned int* GetSegmentOutput()
+	{
+		return &m_segmentresult[0];
+	}
+	void SetInputPointer(unsigned int* input)
+	{
+		m_pInput = input;
 	}
 private:
 	unsigned int* m_pInput, *m_pOutput;
 	int m_index, m_size, m_height, m_width;
+	std::vector<unsigned int> m_segmentresult;
 };
 
 void SDLProgram::Run()
 {
+	char window_caption[128] = {0};
+	unsigned int frame_counter = 0;
+
 	m_bRunning = true;
 	this->Init();
 
@@ -165,36 +188,71 @@ void SDLProgram::Run()
 
 
 	unsigned int pixelcount = (m_screenwidth*m_screenheight);
-	std::vector<unsigned int> pixeldat(pixelcount, 0);
-	std::vector<unsigned int> pixeldat_backing(pixelcount, 0);
+	std::vector<unsigned int> pixeldat(pixelcount);
+	std::vector<unsigned int> pixeldat_backing(pixelcount);
 
 	/* Create initial texture state */
 
 	RandProvider* rng = new SeededRand(0xFEEDFACE);
 	rng->FillRandBytes(reinterpret_cast<unsigned char*>(&pixeldat[0]), sizeof(unsigned int) * pixelcount);
+
+	/* Make black and white */
 	for(unsigned int idx = 0; idx < pixelcount; ++idx)
 	{
 		pixeldat[idx] = (pixeldat[idx] > 0x7FFFFFFF) ?  0xFFFFFFFF : 0xFF000000;
 	}
 	delete rng;
 
-	printf("Entering loop\n");
-
-	char window_caption[128] = {0};
-	unsigned int frame_counter = 0;
 
 
+
+	unsigned int maxthreads = m_threadpool.GetMaxThreads();
+	unsigned int segsize = pixelcount / maxthreads;
+
+	printf("Pixel count: %d Threads: %d Segment size: %d\n", pixelcount, maxthreads, segsize);
+	/* Initialize Thread Tasks */
+	std::vector<CGOLTask> cgoltasks;
+
+	cgoltasks.reserve(maxthreads);
+
+	for(int idx = 0; idx < maxthreads; ++idx)
+	{
+		//FIXME : work distribution in case pixelcount is not divisible by # of threads !!!
+		cgoltasks.emplace_back(CGOLTask(&pixeldat[0], &pixeldat_backing[0],
+								idx * segsize,
+								segsize,
+								m_screenheight, m_screenwidth));
+	}
 
 	while(m_bRunning)
 	{
 
 		/* Begin Draw Code */
+		/*
+		  //Single Threaded
 		for(unsigned int idx = 0; idx < pixelcount; ++idx)
 		{
 			life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
 		}
+		*/
+		m_threadpool.ResetResultCount();
+		for(int idx = 0; idx < maxthreads; ++idx)
+		{
+			m_threadpool.AddTask(&cgoltasks[idx]);
+		}
+
+		m_threadpool.WaitForAllCurrentTasks(maxthreads);
+
+		for(int idx = 0; idx < maxthreads; ++idx)
+		{
+			unsigned int* src = cgoltasks[idx].GetSegmentOutput();
+			memcpy(&pixeldat_backing[idx * segsize], src + (idx * segsize), segsize * sizeof(unsigned int));
+
+		}
 
 		pixeldat.swap(pixeldat_backing);
+		for(int idx = 0; idx < maxthreads; ++idx)
+			cgoltasks[idx].SetInputPointer(&pixeldat[0]);
 
 		/* End Draw Code */
 
@@ -264,7 +322,7 @@ int main(void)
 	printf("SDL Initialization %s.\n",
 		result ? "success" : "failure");
 
-	SDLProgram prog(true);
+	SDLProgram prog(false);
 	prog.CreateWindow(1024, 1024);
 	prog.Run();
 
