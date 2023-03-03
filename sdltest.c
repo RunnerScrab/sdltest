@@ -118,7 +118,7 @@ void SDLProgram::Teardown()
 }
 
 
-
+#undef SLOW_COPY
 void SDLProgram::Run()
 {
 	m_bRunning = true;
@@ -150,6 +150,9 @@ void SDLProgram::Run()
 	delete rng;
 
 	printf("Entering loop\n");
+
+	char window_caption[128] = {0};
+	unsigned int frame_counter = 0;
 	while(m_bRunning)
 	{
 
@@ -158,7 +161,16 @@ void SDLProgram::Run()
 		{
 			life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
 		}
+
+#ifndef SLOW_COPY
 		pixeldat.swap(pixeldat_backing);
+#else
+		for(unsigned int idx = 0; idx < pixelcount; ++idx)
+		{
+			pixeldat[idx] = pixeldat_backing[idx];
+		}
+#endif
+
 		/* End Draw Code */
 
 		/* Update window surface with updated texture */
@@ -184,6 +196,15 @@ void SDLProgram::Run()
 
 		/* Compute FPS for this frame */
 		stopwatch.MarkTime();
+
+		if(!(frame_counter & 31))
+		{
+			snprintf(window_caption, 128, "CGOL FPS: %f Elapsed: %f",
+				stopwatch.GetFPS(), stopwatch.GetElapsedTime());
+			SDL_SetWindowTitle(m_pWindow, window_caption);
+			frame_counter = 0;
+		}
+		++frame_counter;
 	}
 
 	this->Teardown();
@@ -218,7 +239,7 @@ int main(void)
 	printf("SDL Initialization %s.\n",
 		result ? "success" : "failure");
 
-	SDLProgram prog(false);
+	SDLProgram prog(true);
 	prog.CreateWindow(1024, 1024);
 	prog.Run();
 

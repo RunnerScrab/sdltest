@@ -55,7 +55,7 @@ bool life(
 	   neighbours += IsCellOn(input[rowDown-1]) + IsCellOn(input[rowDown]) + IsCellOn(input[rowDown+1]);
 	   if (neighbours == 3 || (IsCellOn(input[i]) && neighbours == 2))
 	   {
-		   output[i] = IsCellOn(input[i]) ? CELL_ON_BLUE : CELL_ON_RED;
+		   output[i] = IsCellOn(input[i]) ? CELL_ON : CELL_ON_RED;
 	   }
 	   else
 	   {
