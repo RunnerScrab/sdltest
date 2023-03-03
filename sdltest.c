@@ -199,7 +199,7 @@ void SDLProgram::InitializeBoard(unsigned int* pixeldat, unsigned int seed, unsi
     /* Make black and white */
     for(unsigned int idx = 0; idx < pixelcount; ++idx)
     {
-        pixeldat[idx] = (pixeldat[idx] > 0x7FFFFFFF) ?  0xFFFFFFFF : 0xFF000000;
+        pixeldat[idx] = (pixeldat[idx] > 0x7FFFFFFF) ?  CELL_OFF : CELL_ON;
     }
     delete rng;
 }
@@ -376,7 +376,7 @@ void SDLProgram::HandleInput(SDL_Event* pev)
 
 void SDLProgram::UpdateDebugDisplay()
 {
-    snprintf(m_window_caption, 128, "Board: %d x %d Threads: %d CGOL AFPS: %f Elapsed: %fs Frames: %u",
+    snprintf(m_window_caption, 128, "Board: %d x %d Threads: %d CGOL Avg. FPS: %f Elapsed: %fs Frames: %u",
              m_screenwidth, m_screenheight, m_maxthreads,
              m_stopwatch.GetAverageFPS(), m_stopwatch.GetElapsedTime(), m_stopwatch.GetElapsedFrames());
     SDL_SetWindowTitle(m_pWindow, m_window_caption);
@@ -417,8 +417,8 @@ int main(void)
     printf("SDL Initialization %s.\n",
            result ? "success" : "failure");
 
-    //SDLProgram prog(1920, 1080, ThreadPool::GetMaxThreads(), false);
-    SDLProgram prog(1024, 1024, 1, false);
+    SDLProgram prog(1920, 1080, ThreadPool::GetMaxThreads(), false);
+    //SDLProgram prog(1024, 1024, 1, false);
     prog.CreateWindow();
     prog.Run();
 
