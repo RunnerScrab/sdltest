@@ -40,6 +40,8 @@ double FrameTimer::GetElapsedTime() const
 {
 	return ((static_cast<double>(ts2.tv_sec)*1.0E9 + ts2.tv_nsec) -
 		(static_cast<double>(first_ts.tv_sec)*1.0E9 + first_ts.tv_nsec))/1.0E9;
+/*	return (((static_cast<double>(ts2.tv_sec) - static_cast<double>(first_ts.tv_sec)))
+	+ (ts2.tv_nsec - first_ts.tv_nsec)/1.0E9);*/
 }
 
 double FrameTimer::GetFPS() const

@@ -56,14 +56,15 @@ private:
 
     unsigned int m_maxthreads;
 
-
-
     ThreadPool* m_pthreadpool = 0;
 
     pthread_mutex_t m_outputbuffer_mutex;
 
     FrameTimer m_stopwatch;
     char m_window_caption[256] = {0};
+
+    bool m_logopt;
+    int m_shamt;
 };
 
 bool SDLProgram::CreateWindow()
@@ -316,7 +317,15 @@ void SDLProgram::RunST()
 
         for(unsigned int idx = 0; idx < m_pixelcount; ++idx)
         {
-            life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
+		switch(m_logopt)
+		{
+		case 0:
+			life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
+			break;
+		default:
+			life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth, m_shamt);
+			break;
+		}
         }
 
         pixeldat.swap(pixeldat_backing);
@@ -377,6 +386,12 @@ SDLProgram::SDLProgram(unsigned int width, unsigned int height, unsigned int max
     m_screenwidth(width), m_screenheight(height), m_bVsync(bVsync), m_maxthreads(maxthreads), m_pthreadpool(0)
 {
     m_pixelcount = width * height;
+    float l2 = log2(width);
+    float p2 = pow(2, l2);
+    m_logopt = p2 == width;
+    m_shamt = l2;
+    if(m_logopt)
+	    printf("Using log2 optimization\n");
 }
 
 SDLProgram::~SDLProgram()
@@ -403,7 +418,7 @@ int main(void)
            result ? "success" : "failure");
 
     //SDLProgram prog(1920, 1080, ThreadPool::GetMaxThreads(), false);
-    SDLProgram prog(1920, 1080, 1, false);
+    SDLProgram prog(1024, 1024, 1, false);
     prog.CreateWindow();
     prog.Run();
 
