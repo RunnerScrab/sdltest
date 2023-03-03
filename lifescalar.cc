@@ -27,22 +27,14 @@ bool life(
    const int height,
    const int width)
 {
-   #ifndef USE_MODULUS
+
    int row = i / width;
    int col = i - (row * width);
 
    int rowUp = i - width;
    int rowDown = i + width;
 
-   bool outOfBounds = (row <= 0) || (row > height) || (col <= 0) || (col > width);
-   #else
-   int rowUp = i - width;
-   int rowDown = i + width;
-   bool outOfBounds = (i < width);
-   outOfBounds |= (i > (width * (height-1)));
-   outOfBounds |= (i % width == 0);
-   outOfBounds |= (i % width == width-1);
-   #endif
+   bool outOfBounds = (row <= 0) || (row >= height) || (col <= 0) || (col >= width);
 
    if (outOfBounds)
    {

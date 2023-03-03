@@ -28,7 +28,7 @@
 class SDLProgram
 {
 public:
-	SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bVsync = true);
+    SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bVsync = true);
     ~SDLProgram();
     bool CreateWindow();
     void Run();
@@ -205,14 +205,14 @@ void SDLProgram::InitializeBoard(unsigned int* pixeldat, unsigned int seed, unsi
 
 void SDLProgram::Run()
 {
-	if(m_maxthreads > 1)
-	{
-		RunMT();
-	}
-	else
-	{
-		RunST();
-	}
+    if(m_maxthreads > 1)
+    {
+        RunMT();
+    }
+    else
+    {
+        RunST();
+    }
 }
 
 void SDLProgram::RunMT()
@@ -240,7 +240,7 @@ void SDLProgram::RunMT()
 
     cgoltasks.reserve(m_maxthreads);
 
-    for(int idx = 0; idx < m_maxthreads; ++idx)
+    for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
     {
         //FIXME : work distribution in case pixelcount is not divisible by # of threads !!!
         cgoltasks.emplace_back(CGOLTask(&pixeldat[0], &pixeldat_backing[0],
@@ -254,37 +254,36 @@ void SDLProgram::RunMT()
 
         /* Begin Draw Code */
 
-            m_pthreadpool->ResetResultCount();
-            for(int idx = 0; idx < m_maxthreads; ++idx)
-            {
-                m_pthreadpool->AddTask(&cgoltasks[idx]);
-            }
+        m_pthreadpool->ResetResultCount();
+        for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
+        {
+            m_pthreadpool->AddTask(&cgoltasks[idx]);
+        }
 
-            m_pthreadpool->WaitForAllCurrentTasks(m_maxthreads);
+        m_pthreadpool->WaitForAllCurrentTasks(m_maxthreads);
 
-
-            for(int idx = 0; idx < m_maxthreads; ++idx)
-            {
-                unsigned int* src = cgoltasks[idx].GetSegmentOutput();
-                memcpy(&pixeldat_backing[idx * segsize], src + (idx * segsize), segsize * sizeof(unsigned int));
-
-            }
+	// Combine work of separate threads
+        for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
+        {
+            unsigned int* src = cgoltasks[idx].GetSegmentOutput();
+            memcpy(&pixeldat_backing[idx * segsize], src + (idx * segsize), segsize * sizeof(unsigned int));
+        }
 
         pixeldat.swap(pixeldat_backing);
 
         /* End Draw Code */
 
         /* Update window surface with updated texture */
-	UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
 
         /* Poll for and handle GUI events */
-	HandleInput(&ev);
+        HandleInput(&ev);
         /* Compute FPS for this frame */
         m_stopwatch.MarkTime();
 
         if(!(frame_counter & 31))
         {
-	    UpdateDebugDisplay();
+            UpdateDebugDisplay();
             frame_counter = 0;
         }
         ++frame_counter;
@@ -315,70 +314,67 @@ void SDLProgram::RunST()
     {
         /* Begin Draw Code */
 
-       for(unsigned int idx = 0; idx < m_pixelcount; ++idx)
-       {
+        for(unsigned int idx = 0; idx < m_pixelcount; ++idx)
+        {
             life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
-       }
+        }
 
         pixeldat.swap(pixeldat_backing);
 
         /* End Draw Code */
 
         /* Update window surface with updated texture */
-	UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
 
         /* Poll for and handle GUI events */
-	HandleInput(&ev);
+        HandleInput(&ev);
 
         /* Compute FPS for this frame */
         m_stopwatch.MarkTime();
 
         if(!(frame_counter & 31))
         {
-		UpdateDebugDisplay();
+            UpdateDebugDisplay();
             frame_counter = 0;
         }
         ++frame_counter;
     }
-
-    m_pthreadpool->StopThreadPool();
-    delete m_pthreadpool;
 
     this->Teardown();
 }
 
 void SDLProgram::UpdateScreen(void* pixeldat, unsigned int pitch)
 {
-        SDL_UpdateTexture(m_pSurfaceTexture, 0, pixeldat, pitch);
-        SDL_RenderCopy(m_pRenderer, m_pSurfaceTexture, 0, 0);
-        SDL_RenderPresent(m_pRenderer);
+    SDL_UpdateTexture(m_pSurfaceTexture, 0, pixeldat, pitch);
+    SDL_RenderCopy(m_pRenderer, m_pSurfaceTexture, 0, 0);
+    SDL_RenderPresent(m_pRenderer);
 }
 
 void SDLProgram::HandleInput(SDL_Event* pev)
 {
-        while(SDL_PollEvent(pev))
+    while(SDL_PollEvent(pev))
+    {
+        switch(pev->type)
         {
-            switch(pev->type)
-            {
-            case SDL_QUIT:
-                m_bRunning = false;
-                break;
-            default:
-                break;
-            }
+        case SDL_QUIT:
+            m_bRunning = false;
+            break;
+        default:
+            break;
         }
+    }
 }
 
 void SDLProgram::UpdateDebugDisplay()
 {
-            snprintf(m_window_caption, 128, "Board: %d x %d Threads: %d CGOL AFPS: %f Elapsed: %fs Frames: %u",
-		    m_screenwidth, m_screenheight, m_maxthreads,
-                     m_stopwatch.GetAverageFPS(), m_stopwatch.GetElapsedTime(), m_stopwatch.GetElapsedFrames());
-            SDL_SetWindowTitle(m_pWindow, m_window_caption);
+    snprintf(m_window_caption, 128, "Board: %d x %d Threads: %d CGOL AFPS: %f Elapsed: %fs Frames: %u",
+             m_screenwidth, m_screenheight, m_maxthreads,
+             m_stopwatch.GetAverageFPS(), m_stopwatch.GetElapsedTime(), m_stopwatch.GetElapsedFrames());
+    SDL_SetWindowTitle(m_pWindow, m_window_caption);
 }
 
 SDLProgram::SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bVsync) :
-m_screenwidth(width), m_screenheight(height), m_bVsync(bVsync), m_maxthreads(maxthreads), m_pthreadpool(0)
+    m_screenwidth(width), m_screenheight(height), m_bVsync(bVsync), m_maxthreads(maxthreads), m_pthreadpool(0)
 {
     m_pixelcount = width * height;
 }
