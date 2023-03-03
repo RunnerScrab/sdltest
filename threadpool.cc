@@ -1,4 +1,5 @@
 #include "threadpool.h"
+
 static void* ThreadPool_Worker(void* pArg)
 {
 	ThreadPool* pTP = reinterpret_cast<ThreadPool*>(pArg);
@@ -43,13 +44,39 @@ static void* ThreadPool_Worker(void* pArg)
 	return 0;
 }
 
-ThreadPool::ThreadPool()
+void ThreadPool::WaitForAllCurrentTasks(unsigned int count)
+{
+		while(true)
+		{
+			for(LockResultMutex();
+			    count > m_result_count && GetIsRunning();)
+			{
+				if(0 != WaitOnResultCond())
+				{
+					UnlockResultMutex();
+					return;
+				}
+			}
+			if(!GetIsRunning())
+				break;
+			unsigned int newcount = m_result_count;
+			UnlockResultMutex();
+
+			if(newcount == count)
+			{
+				break;
+			}
+		}
+}
+
+
+ThreadPool::ThreadPool(unsigned int threads)
 {
     /* A robust program would have error checking and handling */
     pthread_cond_init(&m_wakecond, 0);
     pthread_mutex_init(&m_taskqueuemutex, 0);
     m_bIsRunning = true;
-    m_thread_count = get_nprocs();
+    m_thread_count = threads;
     m_pthreads.resize(m_thread_count);
     for(unsigned int idx = 0; idx < m_thread_count; ++idx)
     {

@@ -28,7 +28,7 @@ public:
 class ThreadPool
 {
 public:
-	ThreadPool();
+	ThreadPool(unsigned int);
 	~ThreadPool();
 
 	unsigned int GetTaskQueueCount()
@@ -115,9 +115,9 @@ public:
 		++m_result_count;
 		UnlockResultMutex();
 	}
-	int GetMaxThreads() const
+	static int GetMaxThreads()
 	{
-		return m_thread_count;
+		return get_nprocs();
 	}
 private:
 	bool m_bIsRunning;
