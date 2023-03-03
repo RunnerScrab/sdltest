@@ -12,11 +12,17 @@
 #include <unistd.h>
 #include <time.h>
 
+#include <pthread.h>
+#include <sys/sysinfo.h>
+#include <deque>
+
 #include "devrand.h"
 #include "sdllibraryhelper.h"
 #include "frametimer.h"
 
 #include "lifescalar.h"
+
+#include "threadpool.h"
 
 class SDLProgram
 {
@@ -39,6 +45,8 @@ private:
 	unsigned int m_screenwidth = 0, m_screenheight = 0;
 
 	bool m_bVsync;
+
+	ThreadPool m_threadpool;
 };
 
 bool SDLProgram::CreateWindow(unsigned int width, unsigned int height)
@@ -115,10 +123,31 @@ void SDLProgram::Teardown()
 		SDL_DestroyRenderer(m_pRenderer);
 		m_pRenderer = 0;
 	}
+
+	m_threadpool.StopThreadPool();
 }
 
 
-#undef SLOW_COPY
+class CGOLTask : public Task
+{
+public:
+CGOLTask(unsigned int* input, unsigned int* output, int startindex, int size, int height, int width) :
+	m_pInput(input), m_pOutput(output),
+		m_index(startindex), m_size(size),
+		m_height(height), m_width(width)
+
+	{
+
+	}
+	virtual void operator()() override
+	{
+		life((int*) m_pInput, (int*) m_pOutput, m_index, m_height, m_width);
+	}
+private:
+	unsigned int* m_pInput, *m_pOutput;
+	int m_index, m_size, m_height, m_width;
+};
+
 void SDLProgram::Run()
 {
 	m_bRunning = true;
@@ -153,6 +182,9 @@ void SDLProgram::Run()
 
 	char window_caption[128] = {0};
 	unsigned int frame_counter = 0;
+
+
+
 	while(m_bRunning)
 	{
 
@@ -162,14 +194,7 @@ void SDLProgram::Run()
 			life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
 		}
 
-#ifndef SLOW_COPY
 		pixeldat.swap(pixeldat_backing);
-#else
-		for(unsigned int idx = 0; idx < pixelcount; ++idx)
-		{
-			pixeldat[idx] = pixeldat_backing[idx];
-		}
-#endif
 
 		/* End Draw Code */
 
