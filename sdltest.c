@@ -42,6 +42,7 @@ private:
     void HandleInput(SDL_Event* pev);
     void UpdateScreen(void* pixeldat, unsigned int pitch);
     void UpdateDebugDisplay();
+    void UpdateDebugDisplayST();
 
     SDL_Window* m_pWindow = 0;
     volatile bool m_bRunning;
@@ -69,7 +70,7 @@ private:
 
 bool SDLProgram::CreateWindow()
 {
-    m_pWindow = SDL_CreateWindow("SDLTest", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+    m_pWindow = SDL_CreateWindow("Paul's Conway's Game of Life Sim", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                                  m_screenwidth, m_screenheight, SDL_WINDOW_SHOWN);
     return 0 == m_pWindow;
 }
@@ -124,8 +125,7 @@ void SDLProgram::Init()
 
     pthread_mutex_init(&m_outputbuffer_mutex, 0);
 
-    m_bRunning = true;
-    m_stopwatch.Init();
+    m_bRunning = false; // Start paused
 }
 
 void SDLProgram::Teardown()
@@ -241,6 +241,28 @@ void SDLProgram::RunMT()
 
     cgoltasks.reserve(m_maxthreads);
 
+    while(!m_bRunning)
+    {
+        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        while(SDL_PollEvent(&ev))
+        {
+
+            switch(ev.type)
+            {
+            case SDL_QUIT:
+                m_bRunning = false;
+		this->Teardown();
+		return;
+		break;
+	    case SDL_KEYUP:
+		m_bRunning = true;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
     for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
     {
         //FIXME : work distribution in case pixelcount is not divisible by # of threads !!!
@@ -250,6 +272,7 @@ void SDLProgram::RunMT()
                                         m_screenheight, m_screenwidth));
     }
 
+    m_stopwatch.Init();
     while(m_bRunning)
     {
 
@@ -263,7 +286,7 @@ void SDLProgram::RunMT()
 
         m_pthreadpool->WaitForAllCurrentTasks(m_maxthreads);
 
-	// Combine work of separate threads
+        // Combine work of separate threads
         for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
         {
             unsigned int* src = cgoltasks[idx].GetSegmentOutput();
@@ -311,21 +334,44 @@ void SDLProgram::RunST()
 
     InitializeBoard(&pixeldat[0], 0xFEEDFACE, m_pixelcount);
 
+    while(!m_bRunning)
+    {
+        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        while(SDL_PollEvent(&ev))
+        {
+
+            switch(ev.type)
+            {
+            case SDL_QUIT:
+                m_bRunning = false;
+		this->Teardown();
+		return;
+		break;
+	    case SDL_KEYUP:
+		m_bRunning = true;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    m_stopwatch.Init();
     while(m_bRunning)
     {
         /* Begin Draw Code */
 
         for(unsigned int idx = 0; idx < m_pixelcount; ++idx)
         {
-		switch(m_logopt)
-		{
-		case 0:
-			life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
-			break;
-		default:
-			life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth, m_shamt);
-			break;
-		}
+            switch(m_logopt)
+            {
+            case 0:
+                life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
+                break;
+            default:
+                life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth, m_shamt);
+                break;
+            }
         }
 
         pixeldat.swap(pixeldat_backing);
@@ -343,7 +389,7 @@ void SDLProgram::RunST()
 
         if(!(frame_counter & 31))
         {
-            UpdateDebugDisplay();
+            UpdateDebugDisplayST();
             frame_counter = 0;
         }
         ++frame_counter;
@@ -376,11 +422,20 @@ void SDLProgram::HandleInput(SDL_Event* pev)
 
 void SDLProgram::UpdateDebugDisplay()
 {
-    snprintf(m_window_caption, 128, "Board: %d x %d Threads: %d CGOL Avg. FPS: %f Elapsed: %fs Frames: %u",
+    snprintf(m_window_caption, 128, "CGOL - Board: %d x %d Threads: %d Avg. FPS: %f Elapsed: %fs Frames: %u",
              m_screenwidth, m_screenheight, m_maxthreads,
              m_stopwatch.GetAverageFPS(), m_stopwatch.GetElapsedTime(), m_stopwatch.GetElapsedFrames());
     SDL_SetWindowTitle(m_pWindow, m_window_caption);
 }
+
+void SDLProgram::UpdateDebugDisplayST()
+{
+    snprintf(m_window_caption, 128, "CGOL - Board: %d x %d Avg. FPS: %f Elapsed: %fs Frames: %u",
+             m_screenwidth, m_screenheight,
+             m_stopwatch.GetAverageFPS(), m_stopwatch.GetElapsedTime(), m_stopwatch.GetElapsedFrames());
+    SDL_SetWindowTitle(m_pWindow, m_window_caption);
+}
+
 
 SDLProgram::SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bVsync) :
     m_screenwidth(width), m_screenheight(height), m_bVsync(bVsync), m_maxthreads(maxthreads), m_pthreadpool(0)
@@ -391,7 +446,7 @@ SDLProgram::SDLProgram(unsigned int width, unsigned int height, unsigned int max
     m_logopt = p2 == width;
     m_shamt = l2;
     if(m_logopt)
-	    printf("Using log2 optimization\n");
+        printf("Using log2 optimization\n");
 }
 
 SDLProgram::~SDLProgram()
@@ -406,10 +461,16 @@ SDLProgram::~SDLProgram()
 
 
 
-int main(void)
+int main(int argc, char** argv)
 {
     SDLLibraryHelper sdl;
     bool result = sdl.InitLibrary();
+    int threads = 1;
+    if(argc >= 2)
+    {
+	    printf("%s\n", argv[1]);
+	    threads = atoi(argv[1]);
+    }
 
     printf("Statically linked SDL version is %s.\n", sdl.GetStaticVerStr());
     printf("Dynamically linked SDL version is %s.\n", sdl.GetStaticVerStr());
@@ -417,8 +478,8 @@ int main(void)
     printf("SDL Initialization %s.\n",
            result ? "success" : "failure");
 
-    SDLProgram prog(1920, 1080, ThreadPool::GetMaxThreads(), false);
-    //SDLProgram prog(1024, 1024, 1, false);
+    //SDLProgram prog(1920, 1040, ThreadPool::GetMaxThreads(), false);
+    SDLProgram prog(1280, 680, threads, false);
     prog.CreateWindow();
     prog.Run();
 
