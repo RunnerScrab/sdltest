@@ -17,14 +17,14 @@ constexpr unsigned int CELL_ON_BLUE = 0xFF0000FF;
 
 
 void life(
-   int* input,
+   const int* input,
    int* output,
    int i,
    const int height,
    const int width);
 
 void life(
-    int *input,
+    const int *input,
     int* output,
     int i,
     const int height,

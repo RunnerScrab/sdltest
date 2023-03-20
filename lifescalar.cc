@@ -9,7 +9,7 @@ static inline bool IsCellOn(unsigned int v)
 
 
 void life(
-    int *input,
+    const int *input,
     int* output,
     int i,
     const int height,
@@ -41,12 +41,10 @@ void life(
             output[i] = CELL_OFF;
         }
     }
-
-    //return output[i] != input[i];
 }
 
 void life(
-    int *input,
+    const int *input,
     int* output,
     int i,
     const int height,
@@ -96,7 +94,7 @@ static inline bool IsCellOn(unsigned int v)
   Returns true if state of cell has changed.
  */
 void life(
-   int *input,
+   const int *input,
    int* output,
    int i,
    const int height,
@@ -122,7 +120,7 @@ void life(
 
 
 void life(
-    int *input,
+    const int *input,
     int* output,
     int i,
     const int height,

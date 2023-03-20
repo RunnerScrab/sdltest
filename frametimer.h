@@ -15,6 +15,7 @@ public:
 private:
 	struct timespec ts1, ts2, first_ts;
 	double fps;
+	double m_first_time;
 	unsigned int m_elapsedframes;
 };
 
