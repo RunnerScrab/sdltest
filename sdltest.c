@@ -158,7 +158,7 @@ void SDLProgram::Teardown()
 class CGOLTask : public Task
 {
 public:
-    CGOLTask(unsigned int* input, unsigned int* output, int startindex, int size, int height, int width) :
+    CGOLTask(unsigned int** input, unsigned int** output, int startindex, int size, int height, int width) :
         m_pInput(input), m_pOutput(output),
         m_index(startindex), m_size(size),
         m_height(height), m_width(width)
@@ -171,8 +171,7 @@ public:
     {
         for(int idx = m_index; idx < (m_size + m_index - 1); ++idx)
         {
-            life((int*) m_pInput, (int*) &m_segmentresult[0], idx, m_height, m_width);
-            //life((int*) m_pInput, (int*) &m_pOutput[0], idx, m_height, m_width);
+            life((int*) *m_pInput, (int*) *m_pOutput, idx, m_height, m_width);
         }
     }
     virtual bool ShouldDelete() {
@@ -182,12 +181,8 @@ public:
     {
         return &m_segmentresult[0];
     }
-    void SetInputPointer(unsigned int* input)
-    {
-        m_pInput = input;
-    }
 private:
-    unsigned int* m_pInput, *m_pOutput;
+    unsigned int** m_pInput, **m_pOutput;
     int m_index, m_size, m_height, m_width;
     std::vector<unsigned int> m_segmentresult;
 };
@@ -370,8 +365,8 @@ void SDLProgram::RunMT()
 
     SDL_Event ev = {0};
 
-    std::vector<unsigned int> pixeldat(m_pixelcount);
-    std::vector<unsigned int> pixeldat_backing(m_pixelcount);
+    unsigned int* pixeldat = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
+    unsigned int* pixeldat_backing = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
 
     /* Create initial texture state */
 
@@ -412,8 +407,7 @@ void SDLProgram::RunMT()
 
     for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
     {
-
-        cgoltasks.emplace_back(CGOLTask(&pixeldat[0], &pixeldat_backing[0],
+        cgoltasks.emplace_back(CGOLTask(&pixeldat, &pixeldat_backing,
                                         idx * segsize,
                                         segsize + ((remainderseg && idx == (m_maxthreads - 1)) ? remainderseg : 0),
                                         m_screenheight, m_screenwidth));
@@ -421,6 +415,7 @@ void SDLProgram::RunMT()
 
 
     m_stopwatch.Init();
+    unsigned int* t = 0;
     while(m_bRunning)
     {
 
@@ -434,14 +429,9 @@ void SDLProgram::RunMT()
 
         m_pthreadpool->WaitForAllCurrentTasks(m_maxthreads);
 
-        // Combine work of separate threads
-        for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
-        {
-            unsigned int* src = cgoltasks[idx].GetSegmentOutput();
-            memcpy(&pixeldat_backing[idx * segsize], src + (idx * segsize), segsize * sizeof(unsigned int));
-        }
-
-        pixeldat.swap(pixeldat_backing);
+	t = pixeldat;
+	pixeldat = pixeldat_backing;
+	pixeldat_backing = t;
 
         /* End Draw Code */
 
@@ -465,6 +455,9 @@ void SDLProgram::RunMT()
     delete m_pthreadpool;
 
     this->Teardown();
+
+    free(pixeldat_backing);
+    free(pixeldat);
 }
 
 void SDLProgram::RunST()
@@ -546,14 +539,14 @@ void SDLProgram::RunST()
     this->Teardown();
 }
 
-void SDLProgram::UpdateScreen(void* pixeldat, unsigned int pitch)
+inline void SDLProgram::UpdateScreen(void* pixeldat, unsigned int pitch)
 {
     SDL_UpdateTexture(m_pSurfaceTexture, 0, pixeldat, pitch);
     SDL_RenderCopy(m_pRenderer, m_pSurfaceTexture, 0, 0);
     SDL_RenderPresent(m_pRenderer);
 }
 
-void SDLProgram::HandleInput(SDL_Event* pev)
+inline void SDLProgram::HandleInput(SDL_Event* pev)
 {
     while(SDL_PollEvent(pev))
     {
@@ -568,7 +561,7 @@ void SDLProgram::HandleInput(SDL_Event* pev)
     }
 }
 
-void SDLProgram::UpdateDebugDisplay()
+inline void SDLProgram::UpdateDebugDisplay()
 {
     snprintf(m_window_caption, 128, "CGOL - Board: %d x %d Threads: %d Avg. FPS: %f Elapsed: %fs Frames: %u",
              m_screenwidth, m_screenheight, m_maxthreads,
@@ -576,7 +569,7 @@ void SDLProgram::UpdateDebugDisplay()
     SDL_SetWindowTitle(m_pWindow, m_window_caption);
 }
 
-void SDLProgram::UpdateDebugDisplayST()
+inline void SDLProgram::UpdateDebugDisplayST()
 {
     snprintf(m_window_caption, 128, "CGOL - Board: %d x %d Avg. FPS: %f Elapsed: %fs Frames: %u",
              m_screenwidth, m_screenheight,

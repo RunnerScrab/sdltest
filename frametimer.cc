@@ -31,12 +31,12 @@ double FrameTimer::GetAverageFPS() const
 	return static_cast<double>(GetElapsedFrames()) / GetElapsedTime();
 }
 
-unsigned int FrameTimer::GetElapsedFrames() const
+inline unsigned int FrameTimer::GetElapsedFrames() const
 {
 	return m_elapsedframes;
 }
 
-double FrameTimer::GetElapsedTime() const
+inline double FrameTimer::GetElapsedTime() const
 {
 	return ((static_cast<double>(ts2.tv_sec)*1.0E9 + ts2.tv_nsec)
 		- m_first_time)/1.0E9;

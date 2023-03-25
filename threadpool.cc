@@ -44,7 +44,7 @@ static void* ThreadPool_Worker(void* pArg)
 	return 0;
 }
 
-void ThreadPool::WaitForAllCurrentTasks(unsigned int count)
+inline void ThreadPool::WaitForAllCurrentTasks(unsigned int count)
 {
 		while(true)
 		{
