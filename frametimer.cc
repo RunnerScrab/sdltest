@@ -7,6 +7,7 @@ FrameTimer::FrameTimer()
 	memset(&ts1, 0, sizeof(struct timespec));
 	memset(&ts2, 0, sizeof(struct timespec));
 	memset(&first_ts, 0, sizeof(struct timespec));
+	m_samples.reserve(256);
 }
 
 void FrameTimer::Init()

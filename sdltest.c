@@ -31,10 +31,11 @@ public:
     SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bMTNaive, bool bVsync = true);
     ~SDLProgram();
     bool CreateWindow();
-    void Run();
-    void RunST();
-    void RunMT();
-    void RunMTNaive();
+    void Run(unsigned int framelimit);
+    void RunST(unsigned int framelimit);
+    void RunMT(unsigned int framelimit);
+    void RunMTNaive(unsigned int framelimit);
+    void WriteData(const char* path);
 protected:
     void Init();
     void Teardown();
@@ -201,18 +202,18 @@ void SDLProgram::InitializeBoard(unsigned int* pixeldat, unsigned int seed, unsi
     delete rng;
 }
 
-void SDLProgram::Run()
+void SDLProgram::Run(unsigned int framelimit)
 {
     if(m_maxthreads > 1)
     {
         if(!m_bMTNaive)
-            RunMT();
+            RunMT(framelimit);
         else
-            RunMTNaive();
+            RunMTNaive(framelimit);
     }
     else
     {
-        RunST();
+        RunST(framelimit);
     }
 }
 
@@ -236,7 +237,7 @@ void* LifeThreadCode(void* arg)
     return 0;
 }
 
-void SDLProgram::RunMTNaive()
+void SDLProgram::RunMTNaive(unsigned int framelimit)
 {
     unsigned int frame_counter = 0;
 
@@ -334,6 +335,12 @@ void SDLProgram::RunMTNaive()
             frame_counter = 0;
         }
         ++frame_counter;
+
+	if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
+	{
+		m_bRunning = false;
+	}
+
     }
 
     free(pThreads);
@@ -344,7 +351,7 @@ void SDLProgram::RunMTNaive()
     free(pixeldat_backing);
 }
 
-void SDLProgram::RunMT()
+void SDLProgram::RunMT(unsigned int framelimit)
 {
     m_pthreadpool = new ThreadPool(m_maxthreads);
 
@@ -438,6 +445,11 @@ void SDLProgram::RunMT()
             frame_counter = 0;
         }
         ++frame_counter;
+
+	if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
+	{
+		m_bRunning = false;
+	}
     }
 
     m_pthreadpool->StopThreadPool();
@@ -449,7 +461,7 @@ void SDLProgram::RunMT()
     free(pixeldat);
 }
 
-void SDLProgram::RunST()
+void SDLProgram::RunST(unsigned int framelimit)
 {
     unsigned int frame_counter = 0;
 
@@ -523,6 +535,11 @@ void SDLProgram::RunST()
             frame_counter = 0;
         }
         ++frame_counter;
+
+	if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
+	{
+		m_bRunning = false;
+	}
     }
 
     this->Teardown();
@@ -566,18 +583,20 @@ inline void SDLProgram::HandleInput(SDL_Event* pev)
 
 inline void SDLProgram::UpdateDebugDisplay()
 {
-    snprintf(m_window_caption, 128, "CGOL - Board: %d x %d Threads: %d Avg. FPS: %f Elapsed: %fs Frames: %u",
-             m_screenwidth, m_screenheight, m_maxthreads,
+    snprintf(m_window_caption, 128, "CGOL - Board: %d x %d Threads: %d InstFPS: %f Avg. FPS: %f Elapsed: %fs Frames: %u",
+	    m_screenwidth, m_screenheight, m_maxthreads, m_stopwatch.GetFPS(),
              m_stopwatch.GetAverageFPS(), m_stopwatch.GetElapsedTime(), m_stopwatch.GetElapsedFrames());
     SDL_SetWindowTitle(m_pWindow, m_window_caption);
+    m_stopwatch.RecordSample();
 }
 
 inline void SDLProgram::UpdateDebugDisplayST()
 {
-    snprintf(m_window_caption, 128, "CGOL - Board: %d x %d Avg. FPS: %f Elapsed: %fs Frames: %u",
-             m_screenwidth, m_screenheight,
+    snprintf(m_window_caption, 128, "CGOL - Board: %d x %d InstFPS: %f Avg. FPS: %f Elapsed: %fs Frames: %u",
+	    m_screenwidth, m_screenheight, m_stopwatch.GetFPS(),
              m_stopwatch.GetAverageFPS(), m_stopwatch.GetElapsedTime(), m_stopwatch.GetElapsedFrames());
     SDL_SetWindowTitle(m_pWindow, m_window_caption);
+    m_stopwatch.RecordSample();
 }
 
 
@@ -604,7 +623,19 @@ SDLProgram::~SDLProgram()
 }
 
 
+void SDLProgram::WriteData(const char* path)
+{
+	FILE* fp = fopen(path, "w");
 
+	std::vector<struct FPSSample> samples = m_stopwatch.GetSamples();
+	for(int idx = 0, z = samples.size(); idx < z; ++idx)
+	{
+		fprintf(fp, "%f %f %d\n", samples[idx].t, samples[idx].fps,
+			samples[idx].framecount);
+	}
+	fprintf(fp, "\n");
+	fclose(fp);
+}
 
 int main(int argc, char** argv)
 {
@@ -633,8 +664,11 @@ int main(int argc, char** argv)
     //SDLProgram prog(1920, 1040, ThreadPool::GetMaxThreads(), false);
     SDLProgram prog(1280, 680, threads, bMTNaive, false);
     prog.CreateWindow();
-    prog.Run();
+    prog.Run(5000);
 
     SDL_Quit();
+    char filename[64] = {0};
+    snprintf(filename, 64, "fps_%d.dat", threads);
+    prog.WriteData(filename);
     return 0;
 }
