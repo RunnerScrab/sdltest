@@ -2,11 +2,11 @@
 //#define USE_MODULUS
 #define USE_OPTIMIZED
 #ifdef USE_OPTIMIZED
+
 static inline bool IsCellOn(unsigned int v)
 {
     return (v ^ CELL_OFF);
 }
-
 
 void life(
     const int *input,
@@ -23,11 +23,7 @@ void life(
 
     bool outOfBounds = (row <= 0) || (row >= height) || (col <= 0) || (col >= width);
 
-    if (outOfBounds)
-    {
-        output[i] = CELL_OFF;
-    }
-    else
+    if (!outOfBounds)
     {
         int neighbours = IsCellOn(input[rowUp-1]) + IsCellOn(input[rowUp]) + IsCellOn(input[rowUp+1]);
         neighbours += IsCellOn(input[i-1]) + IsCellOn(input[i+1]);
@@ -40,6 +36,10 @@ void life(
         {
             output[i] = CELL_OFF;
         }
+    }
+    else
+    {
+        output[i] = CELL_OFF;
     }
 }
 
@@ -58,11 +58,7 @@ void life(
 
     bool outOfBounds = (row <= 0) || (row >= height) || (col <= 0) || (col >= width);
 
-    if (outOfBounds)
-    {
-        output[i] = CELL_OFF;
-    }
-    else
+    if (!outOfBounds)
     {
         int neighbours = IsCellOn(input[rowUp-1]) + IsCellOn(input[rowUp]) + IsCellOn(input[rowUp+1]);
         neighbours += IsCellOn(input[i-1]) + IsCellOn(input[i+1]);
@@ -75,6 +71,10 @@ void life(
         {
             output[i] = CELL_OFF;
         }
+    }
+    else
+    {
+        output[i] = CELL_OFF;
     }
 
     //return output[i] != input[i];

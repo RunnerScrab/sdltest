@@ -217,10 +217,9 @@ void SDLProgram::Run()
 
 struct LifeThreadPackage
 {
-    const int* input;
-    int* output;
+    const int** input;
+    int** output;
     int start_idx, size, height, width;
-    std::vector<unsigned int> segment_result;
 };
 
 void* LifeThreadCode(void* arg)
@@ -230,7 +229,7 @@ void* LifeThreadCode(void* arg)
             end = ppkg->size + ppkg->start_idx - 1;
             idx < end; ++idx)
     {
-        life((const int*)(ppkg->input), (int*) &(ppkg->segment_result[0]), idx,
+	    life((const int*)(*(ppkg->input)), (int*) *(ppkg->output), idx,
              ppkg->height, ppkg->width);
     }
     return 0;
@@ -244,8 +243,8 @@ void SDLProgram::RunMTNaive()
 
     SDL_Event ev = {0};
 
-    std::vector<int> pixeldat(m_pixelcount);
-    std::vector<int> pixeldat_backing(m_pixelcount);
+    unsigned int* pixeldat = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
+    unsigned int* pixeldat_backing = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
 
     /* Create initial texture state */
 
@@ -255,6 +254,7 @@ void SDLProgram::RunMTNaive()
 
     printf("Pixel count: %d Threads: %d Segment size: %d\n", m_pixelcount, m_maxthreads, segsize);
 
+    // Crappy way to pause program before running; mainly so I can manually screen record
     while(!m_bRunning)
     {
         UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
@@ -288,27 +288,18 @@ void SDLProgram::RunMTNaive()
     {
 
         struct LifeThreadPackage* ppkg = &pPackages[idx];
-        ppkg->input = &pixeldat[0];
-        ppkg->output = &pixeldat_backing[0];
+        ppkg->input = (const int**) &pixeldat;
+        ppkg->output = (int**) &pixeldat_backing;
         ppkg->start_idx = idx * segsize;
         ppkg->size = segsize + ((remainderseg && idx == (m_maxthreads - 1)) ? remainderseg : 0);
         ppkg->height = m_screenheight;
         ppkg->width = m_screenwidth;
-        ppkg->segment_result.resize(m_screenheight * m_screenwidth);
-        ppkg->segment_result.clear();
     }
 
+    unsigned int* t = 0;
     m_stopwatch.Init();
     while(m_bRunning)
     {
-        for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
-        {
-
-            struct LifeThreadPackage* ppkg = &pPackages[idx];
-            ppkg->input = &pixeldat[0];
-            ppkg->output = &pixeldat_backing[0];
-        }
-
         /* Begin Draw Code */
         for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
         {
@@ -321,14 +312,9 @@ void SDLProgram::RunMTNaive()
             pthread_join(pThreads[idx], &res);
         }
 
-        // Combine work of separate threads
-        for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
-        {
-            unsigned int* src = &(pPackages[idx].segment_result[0]);
-            memcpy(&pixeldat_backing[idx * segsize], src + (idx * segsize), segsize * sizeof(unsigned int));
-        }
-
-        pixeldat.swap(pixeldat_backing);
+	t = pixeldat;
+	pixeldat = pixeldat_backing;
+	pixeldat_backing = t;
 
         /* End Draw Code */
 
@@ -352,7 +338,8 @@ void SDLProgram::RunMTNaive()
     delete [] pPackages;
 
     this->Teardown();
-
+    free(pixeldat);
+    free(pixeldat_backing);
 }
 
 void SDLProgram::RunMT()
