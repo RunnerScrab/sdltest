@@ -171,7 +171,7 @@ public:
     }
     virtual void operator()() override
     {
-        for(int idx = m_index; idx < (m_size + m_index - 1); ++idx)
+        for(int idx = m_index; idx < (m_size + m_index); ++idx)
         {
             life((int*) *m_pInput, (int*) *m_pOutput, idx, m_height, m_width);
         }
@@ -192,8 +192,9 @@ private:
 void SDLProgram::InitializeBoard(unsigned int* pixeldat, unsigned int seed, unsigned int pixelcount)
 {
     RandProvider* rng = new SeededRand(seed);
-    rng->FillRandBytes(reinterpret_cast<unsigned char*>(pixeldat), sizeof(unsigned int) * pixelcount);
 
+    rng->FillRandBytes(reinterpret_cast<unsigned char*>(pixeldat), sizeof(unsigned int) * pixelcount);
+    printf("First rand nums: %d, %d, %d\n", pixeldat[0], pixeldat[1], pixeldat[2]);
     /* Make black and white */
     for(unsigned int idx = 0; idx < pixelcount; ++idx)
     {
@@ -228,7 +229,7 @@ void* LifeThreadCode(void* arg)
 {
     struct LifeThreadPackage* ppkg = reinterpret_cast<struct LifeThreadPackage*>(arg);
     for(int idx = ppkg->start_idx,
-            end = ppkg->size + ppkg->start_idx - 1;
+            end = ppkg->size + ppkg->start_idx;
             idx < end; ++idx)
     {
         life((const int*)(*(ppkg->input)), (int*) *(ppkg->output), idx,
@@ -247,6 +248,9 @@ void SDLProgram::RunMTNaive(unsigned int framelimit)
 
     unsigned int* pixeldat = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
     unsigned int* pixeldat_backing = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
+
+    memset(pixeldat, 0, sizeof(unsigned int) * m_pixelcount);
+    memset(pixeldat_backing, 0, sizeof(unsigned int) * m_pixelcount);
 
     /* Create initial texture state */
 
@@ -336,10 +340,10 @@ void SDLProgram::RunMTNaive(unsigned int framelimit)
         }
         ++frame_counter;
 
-	if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
-	{
-		m_bRunning = false;
-	}
+        if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
+        {
+            m_bRunning = false;
+        }
 
     }
 
@@ -364,6 +368,8 @@ void SDLProgram::RunMT(unsigned int framelimit)
     unsigned int* pixeldat = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
     unsigned int* pixeldat_backing = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
 
+    memset(pixeldat, 0, sizeof(unsigned int) * m_pixelcount);
+    memset(pixeldat_backing, 0, sizeof(unsigned int) * m_pixelcount);
     /* Create initial texture state */
 
     InitializeBoard(&pixeldat[0], 0xFEEDFACE, m_pixelcount);
@@ -446,10 +452,10 @@ void SDLProgram::RunMT(unsigned int framelimit)
         }
         ++frame_counter;
 
-	if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
-	{
-		m_bRunning = false;
-	}
+        if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
+        {
+            m_bRunning = false;
+        }
     }
 
     m_pthreadpool->StopThreadPool();
@@ -469,8 +475,8 @@ void SDLProgram::RunST(unsigned int framelimit)
 
     SDL_Event ev = {0};
 
-    std::vector<unsigned int> pixeldat(m_pixelcount);
-    std::vector<unsigned int> pixeldat_backing(m_pixelcount);
+    std::vector<unsigned int> pixeldat(m_pixelcount, 0);
+    std::vector<unsigned int> pixeldat_backing(m_pixelcount, 0);
 
     /* Create initial texture state */
 
@@ -505,15 +511,7 @@ void SDLProgram::RunST(unsigned int framelimit)
 
         for(unsigned int idx = 0; idx < m_pixelcount; ++idx)
         {
-            switch(m_logopt)
-            {
-            case 0:
-                life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
-                break;
-            default:
-                life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth, m_shamt);
-                break;
-            }
+            life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
         }
 
         pixeldat.swap(pixeldat_backing);
@@ -536,10 +534,10 @@ void SDLProgram::RunST(unsigned int framelimit)
         }
         ++frame_counter;
 
-	if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
-	{
-		m_bRunning = false;
-	}
+        if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
+        {
+            m_bRunning = false;
+        }
     }
 
     this->Teardown();
@@ -584,7 +582,7 @@ inline void SDLProgram::HandleInput(SDL_Event* pev)
 inline void SDLProgram::UpdateDebugDisplay()
 {
     snprintf(m_window_caption, 128, "CGOL - Board: %d x %d Threads: %d InstFPS: %f Avg. FPS: %f Elapsed: %fs Frames: %u",
-	    m_screenwidth, m_screenheight, m_maxthreads, m_stopwatch.GetFPS(),
+             m_screenwidth, m_screenheight, m_maxthreads, m_stopwatch.GetFPS(),
              m_stopwatch.GetAverageFPS(), m_stopwatch.GetElapsedTime(), m_stopwatch.GetElapsedFrames());
     SDL_SetWindowTitle(m_pWindow, m_window_caption);
     m_stopwatch.RecordSample();
@@ -593,7 +591,7 @@ inline void SDLProgram::UpdateDebugDisplay()
 inline void SDLProgram::UpdateDebugDisplayST()
 {
     snprintf(m_window_caption, 128, "CGOL - Board: %d x %d InstFPS: %f Avg. FPS: %f Elapsed: %fs Frames: %u",
-	    m_screenwidth, m_screenheight, m_stopwatch.GetFPS(),
+             m_screenwidth, m_screenheight, m_stopwatch.GetFPS(),
              m_stopwatch.GetAverageFPS(), m_stopwatch.GetElapsedTime(), m_stopwatch.GetElapsedFrames());
     SDL_SetWindowTitle(m_pWindow, m_window_caption);
     m_stopwatch.RecordSample();
@@ -625,16 +623,16 @@ SDLProgram::~SDLProgram()
 
 void SDLProgram::WriteData(const char* path)
 {
-	FILE* fp = fopen(path, "w");
+    FILE* fp = fopen(path, "w");
 
-	std::vector<struct FPSSample> samples = m_stopwatch.GetSamples();
-	for(int idx = 0, z = samples.size(); idx < z; ++idx)
-	{
-		fprintf(fp, "%f %f %d\n", samples[idx].t, samples[idx].fps,
-			samples[idx].framecount);
-	}
-	fprintf(fp, "\n");
-	fclose(fp);
+    std::vector<struct FPSSample> samples = m_stopwatch.GetSamples();
+    for(int idx = 0, z = samples.size(); idx < z; ++idx)
+    {
+        fprintf(fp, "%f %f %d\n", samples[idx].t, samples[idx].fps,
+                samples[idx].framecount);
+    }
+    fprintf(fp, "\n");
+    fclose(fp);
 }
 
 int main(int argc, char** argv)
@@ -664,11 +662,11 @@ int main(int argc, char** argv)
     //SDLProgram prog(1920, 1040, ThreadPool::GetMaxThreads(), false);
     SDLProgram prog(1280, 680, threads, bMTNaive, false);
     prog.CreateWindow();
-    prog.Run(5000);
+    prog.Run(10000);
 
     SDL_Quit();
     char filename[64] = {0};
-    snprintf(filename, 64, "fps_%d.dat", threads);
+    snprintf(filename, 64, "%sfps_%d.dat", bMTNaive ? "n" : "t", threads);
     prog.WriteData(filename);
     return 0;
 }
