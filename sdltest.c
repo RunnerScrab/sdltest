@@ -28,12 +28,13 @@
 class SDLProgram
 {
 public:
-    SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bVsync = true);
+    SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bMTNaive, bool bVsync = true);
     ~SDLProgram();
     bool CreateWindow();
     void Run();
     void RunST();
     void RunMT();
+    void RunMTNaive();
 protected:
     void Init();
     void Teardown();
@@ -53,7 +54,7 @@ private:
 
     unsigned int m_screenwidth = 0, m_screenheight = 0;
     unsigned int m_pixelcount = 0;
-    bool m_bVsync;
+    bool m_bVsync, m_bMTNaive;
 
     unsigned int m_maxthreads;
 
@@ -208,12 +209,155 @@ void SDLProgram::Run()
 {
     if(m_maxthreads > 1)
     {
-        RunMT();
+        if(!m_bMTNaive)
+            RunMT();
+        else
+            RunMTNaive();
     }
     else
     {
         RunST();
     }
+}
+
+struct LifeThreadPackage
+{
+    const int* input;
+    int* output;
+    int start_idx, size, height, width;
+    std::vector<unsigned int> segment_result;
+};
+
+void* LifeThreadCode(void* arg)
+{
+    struct LifeThreadPackage* ppkg = reinterpret_cast<struct LifeThreadPackage*>(arg);
+    for(int idx = ppkg->start_idx,
+            end = ppkg->size + ppkg->start_idx - 1;
+            idx < end; ++idx)
+    {
+        life((const int*)(ppkg->input), (int*) &(ppkg->segment_result[0]), idx,
+             ppkg->height, ppkg->width);
+    }
+    return 0;
+}
+
+void SDLProgram::RunMTNaive()
+{
+    unsigned int frame_counter = 0;
+
+    this->Init();
+
+    SDL_Event ev = {0};
+
+    std::vector<int> pixeldat(m_pixelcount);
+    std::vector<int> pixeldat_backing(m_pixelcount);
+
+    /* Create initial texture state */
+
+    InitializeBoard(reinterpret_cast<unsigned int*>(&pixeldat[0]), 0xFEEDFACE, m_pixelcount);
+
+    unsigned int segsize = m_pixelcount / m_maxthreads;
+
+    printf("Pixel count: %d Threads: %d Segment size: %d\n", m_pixelcount, m_maxthreads, segsize);
+
+    while(!m_bRunning)
+    {
+        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        while(SDL_PollEvent(&ev))
+        {
+
+            switch(ev.type)
+            {
+            case SDL_QUIT:
+                m_bRunning = false;
+                this->Teardown();
+                return;
+                break;
+            case SDL_KEYUP:
+                m_bRunning = true;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    pthread_t* pThreads = (pthread_t*) malloc(sizeof(pthread_t) * m_maxthreads);
+    struct LifeThreadPackage* pPackages = new LifeThreadPackage[m_maxthreads];
+    memset(pThreads, 0, sizeof(pthread_t) * m_maxthreads);
+
+    //The remainder pixels are the responsibility of the last thread
+    unsigned int remainderseg = m_pixelcount - (segsize * m_maxthreads);
+
+    for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
+    {
+
+        struct LifeThreadPackage* ppkg = &pPackages[idx];
+        ppkg->input = &pixeldat[0];
+        ppkg->output = &pixeldat_backing[0];
+        ppkg->start_idx = idx * segsize;
+        ppkg->size = segsize + ((remainderseg && idx == (m_maxthreads - 1)) ? remainderseg : 0);
+        ppkg->height = m_screenheight;
+        ppkg->width = m_screenwidth;
+        ppkg->segment_result.resize(m_screenheight * m_screenwidth);
+        ppkg->segment_result.clear();
+    }
+
+    m_stopwatch.Init();
+    while(m_bRunning)
+    {
+        for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
+        {
+
+            struct LifeThreadPackage* ppkg = &pPackages[idx];
+            ppkg->input = &pixeldat[0];
+            ppkg->output = &pixeldat_backing[0];
+        }
+
+        /* Begin Draw Code */
+        for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
+        {
+            pthread_create(&pThreads[idx], 0, LifeThreadCode, &pPackages[idx]);
+        }
+        /* Wait for all threads to complete */
+        void* res = 0;
+        for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
+        {
+            pthread_join(pThreads[idx], &res);
+        }
+
+        // Combine work of separate threads
+        for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
+        {
+            unsigned int* src = &(pPackages[idx].segment_result[0]);
+            memcpy(&pixeldat_backing[idx * segsize], src + (idx * segsize), segsize * sizeof(unsigned int));
+        }
+
+        pixeldat.swap(pixeldat_backing);
+
+        /* End Draw Code */
+
+        /* Update window surface with updated texture */
+        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+
+        /* Poll for and handle GUI events */
+        HandleInput(&ev);
+        /* Compute FPS for this frame */
+        m_stopwatch.MarkTime();
+
+        if(!(frame_counter & 31))
+        {
+            UpdateDebugDisplay();
+            frame_counter = 0;
+        }
+        ++frame_counter;
+    }
+
+    free(pThreads);
+    delete [] pPackages;
+
+    this->Teardown();
+
 }
 
 void SDLProgram::RunMT()
@@ -251,11 +395,11 @@ void SDLProgram::RunMT()
             {
             case SDL_QUIT:
                 m_bRunning = false;
-		this->Teardown();
-		return;
-		break;
-	    case SDL_KEYUP:
-		m_bRunning = true;
+                this->Teardown();
+                return;
+                break;
+            case SDL_KEYUP:
+                m_bRunning = true;
                 break;
             default:
                 break;
@@ -271,7 +415,7 @@ void SDLProgram::RunMT()
 
         cgoltasks.emplace_back(CGOLTask(&pixeldat[0], &pixeldat_backing[0],
                                         idx * segsize,
-					segsize + ((remainderseg && idx == (m_maxthreads - 1)) ? remainderseg : 0),
+                                        segsize + ((remainderseg && idx == (m_maxthreads - 1)) ? remainderseg : 0),
                                         m_screenheight, m_screenwidth));
     }
 
@@ -348,11 +492,11 @@ void SDLProgram::RunST()
             {
             case SDL_QUIT:
                 m_bRunning = false;
-		this->Teardown();
-		return;
-		break;
-	    case SDL_KEYUP:
-		m_bRunning = true;
+                this->Teardown();
+                return;
+                break;
+            case SDL_KEYUP:
+                m_bRunning = true;
                 break;
             default:
                 break;
@@ -441,8 +585,9 @@ void SDLProgram::UpdateDebugDisplayST()
 }
 
 
-SDLProgram::SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bVsync) :
-    m_screenwidth(width), m_screenheight(height), m_bVsync(bVsync), m_maxthreads(maxthreads), m_pthreadpool(0)
+SDLProgram::SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bMTNaive, bool bVsync) :
+    m_screenwidth(width), m_screenheight(height),
+    m_bVsync(bVsync), m_bMTNaive(bMTNaive), m_maxthreads(maxthreads), m_pthreadpool(0)
 {
     m_pixelcount = width * height;
     float l2 = log2(width);
@@ -470,10 +615,17 @@ int main(int argc, char** argv)
     SDLLibraryHelper sdl;
     bool result = sdl.InitLibrary();
     int threads = 1;
+    bool bMTNaive = false;
     if(argc >= 2)
     {
-	    printf("%s\n", argv[1]);
-	    threads = atoi(argv[1]);
+        printf("%s\n", argv[1]);
+        threads = atoi(argv[1]);
+    }
+
+    if(argc >= 3)
+    {
+        bMTNaive = argv[2][0] == 'n';
+        printf("Running Naive MT implementation.\n");
     }
 
     printf("Statically linked SDL version is %s.\n", sdl.GetStaticVerStr());
@@ -483,7 +635,7 @@ int main(int argc, char** argv)
            result ? "success" : "failure");
 
     //SDLProgram prog(1920, 1040, ThreadPool::GetMaxThreads(), false);
-    SDLProgram prog(1280, 680, threads, false);
+    SDLProgram prog(1280, 680, threads, bMTNaive, false);
     prog.CreateWindow();
     prog.Run();
 
