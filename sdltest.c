@@ -70,7 +70,7 @@ private:
 
 bool SDLProgram::CreateWindow()
 {
-    m_pWindow = SDL_CreateWindow("Paul's Conway's Game of Life Sim", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+    m_pWindow = SDL_CreateWindow("Conway's Game of Life Sim", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                                  m_screenwidth, m_screenheight, SDL_WINDOW_SHOWN);
     return 0 == m_pWindow;
 }
@@ -263,14 +263,18 @@ void SDLProgram::RunMT()
         }
     }
 
+    //The remainder pixels are the responsibility of the last thread
+    unsigned int remainderseg = m_pixelcount - (segsize * m_maxthreads);
+
     for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
     {
-        //FIXME : work distribution in case pixelcount is not divisible by # of threads !!!
+
         cgoltasks.emplace_back(CGOLTask(&pixeldat[0], &pixeldat_backing[0],
                                         idx * segsize,
-                                        segsize,
+					segsize + ((remainderseg && idx == (m_maxthreads - 1)) ? remainderseg : 0),
                                         m_screenheight, m_screenwidth));
     }
+
 
     m_stopwatch.Init();
     while(m_bRunning)
