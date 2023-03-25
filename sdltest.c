@@ -25,6 +25,8 @@
 
 #include "threadpool.h"
 
+#include "colorwheel.h"
+
 class SDLProgram
 {
 public:
@@ -158,33 +160,29 @@ void SDLProgram::Teardown()
 class CGOLTask : public Task
 {
 public:
-    CGOLTask(unsigned int** input, unsigned int** output, int startindex, int size, int height, int width) :
+CGOLTask(unsigned int** input, unsigned int** output, int startindex, int size, int height, int width,
+	unsigned int color = 0xFFFF0000) :
         m_pInput(input), m_pOutput(output),
         m_index(startindex), m_size(size),
-        m_height(height), m_width(width)
+		m_height(height), m_width(width),
+		m_color(color)
 
     {
         printf("Segment starting at %d with size %d\n", startindex, size);
-        m_segmentresult.resize(width * height);
     }
     virtual void operator()() override
     {
         for(int idx = m_index; idx < (m_size + m_index - 1); ++idx)
         {
-            life((int*) *m_pInput, (int*) *m_pOutput, idx, m_height, m_width);
+		life((int*) *m_pInput, (int*) *m_pOutput, idx, m_height, m_width, m_color);
         }
     }
     virtual bool ShouldDelete() {
         return false;
     }
-    unsigned int* GetSegmentOutput()
-    {
-        return &m_segmentresult[0];
-    }
 private:
     unsigned int** m_pInput, **m_pOutput;
-    int m_index, m_size, m_height, m_width;
-    std::vector<unsigned int> m_segmentresult;
+    int m_index, m_size, m_height, m_width, m_color;
 };
 
 void SDLProgram::InitializeBoard(unsigned int* pixeldat, unsigned int seed, unsigned int pixelcount)
@@ -220,6 +218,7 @@ struct LifeThreadPackage
     const int** input;
     int** output;
     int start_idx, size, height, width;
+    unsigned int color;
 };
 
 void* LifeThreadCode(void* arg)
@@ -230,7 +229,7 @@ void* LifeThreadCode(void* arg)
             idx < end; ++idx)
     {
 	    life((const int*)(*(ppkg->input)), (int*) *(ppkg->output), idx,
-             ppkg->height, ppkg->width);
+		    ppkg->height, ppkg->width, ppkg->color);
     }
     return 0;
 }
@@ -283,7 +282,7 @@ void SDLProgram::RunMTNaive()
 
     //The remainder pixels are the responsibility of the last thread
     unsigned int remainderseg = m_pixelcount - (segsize * m_maxthreads);
-
+    union rgb segcol;
     for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
     {
 
@@ -294,6 +293,8 @@ void SDLProgram::RunMTNaive()
         ppkg->size = segsize + ((remainderseg && idx == (m_maxthreads - 1)) ? remainderseg : 0);
         ppkg->height = m_screenheight;
         ppkg->width = m_screenwidth;
+	hsv_to_rgb(&segcol, m_maxthreads, idx);
+	ppkg->color = segcol.val;
     }
 
     unsigned int* t = 0;
@@ -391,13 +392,14 @@ void SDLProgram::RunMT()
 
     //The remainder pixels are the responsibility of the last thread
     unsigned int remainderseg = m_pixelcount - (segsize * m_maxthreads);
-
+    union rgb segcol;
     for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
     {
+	hsv_to_rgb(&segcol, m_maxthreads, idx);
         cgoltasks.emplace_back(CGOLTask(&pixeldat, &pixeldat_backing,
                                         idx * segsize,
                                         segsize + ((remainderseg && idx == (m_maxthreads - 1)) ? remainderseg : 0),
-                                        m_screenheight, m_screenwidth));
+							m_screenheight, m_screenwidth, segcol.val));
     }
 
 
@@ -491,15 +493,8 @@ void SDLProgram::RunST()
 
         for(unsigned int idx = 0; idx < m_pixelcount; ++idx)
         {
-            switch(m_logopt)
-            {
-            case 0:
-                life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
-                break;
-            default:
-                life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth, m_shamt);
-                break;
-            }
+	   life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx,
+		   m_screenheight, m_screenwidth, 0xFFFF0000);
         }
 
         pixeldat.swap(pixeldat_backing);

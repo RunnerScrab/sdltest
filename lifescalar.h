@@ -21,13 +21,6 @@ void life(
    int* output,
    int i,
    const int height,
-   const int width);
-
-void life(
-    const int *input,
-    int* output,
-    int i,
-    const int height,
-    const int width, const int shiftamt);
+   const int width, unsigned int oncolor);
 
 #endif /* LIFESCALAR_H_ */

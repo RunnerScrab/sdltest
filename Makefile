@@ -3,7 +3,7 @@ CXXFLAGS = -I /usr/include/SDL2
 LDLIBS = -lm -lSDL2
 INCLUDES = /usr/include/SDL2
 
-sdltest: sdltest.o devrand.o frametimer.o sdllibraryhelper.o lifescalar.o threadpool.o
+sdltest: sdltest.o devrand.o frametimer.o sdllibraryhelper.o lifescalar.o threadpool.o colorwheel.o
 	${CXX} $^ -o sdltest ${LDLIBS}
 
 sdltest.o: sdltest.c
@@ -18,6 +18,7 @@ threadpool.o: threadpool.cc
 	${CXX} -c $^ ${LDLIBS} -I${INCLUDES}
 lifescalar.o: lifescalar.cc
 	${CXX} -c $^ ${LDLIBS} -I${INCLUDES}
-
+colorwheel.o: colorwheel.cc
+	${CXX} -c $^ ${LDLIBS} -I${INCLUDES}
 clean:
 	rm -f sdltest *.o
