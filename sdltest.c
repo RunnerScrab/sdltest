@@ -42,6 +42,7 @@ private:
     void InitializeBoard(unsigned int* pixeldat, unsigned int seed, unsigned int pixelcount);
     void HandleInput(SDL_Event* pev);
     void UpdateScreen(void* pixeldat, unsigned int pitch);
+    void UpdateScreenDebug(void* pixeldat, unsigned int pitch);
     void UpdateDebugDisplay();
     void UpdateDebugDisplayST();
 
@@ -229,7 +230,7 @@ void* LifeThreadCode(void* arg)
             end = ppkg->size + ppkg->start_idx - 1;
             idx < end; ++idx)
     {
-	    life((const int*)(*(ppkg->input)), (int*) *(ppkg->output), idx,
+        life((const int*)(*(ppkg->input)), (int*) *(ppkg->output), idx,
              ppkg->height, ppkg->width);
     }
     return 0;
@@ -257,7 +258,8 @@ void SDLProgram::RunMTNaive()
     // Crappy way to pause program before running; mainly so I can manually screen record
     while(!m_bRunning)
     {
-        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        UpdateScreenDebug(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+
         while(SDL_PollEvent(&ev))
         {
 
@@ -312,14 +314,14 @@ void SDLProgram::RunMTNaive()
             pthread_join(pThreads[idx], &res);
         }
 
-	t = pixeldat;
-	pixeldat = pixeldat_backing;
-	pixeldat_backing = t;
+        t = pixeldat;
+        pixeldat = pixeldat_backing;
+        pixeldat_backing = t;
 
         /* End Draw Code */
 
         /* Update window surface with updated texture */
-        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        UpdateScreenDebug(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
 
         /* Poll for and handle GUI events */
         HandleInput(&ev);
@@ -369,7 +371,7 @@ void SDLProgram::RunMT()
 
     while(!m_bRunning)
     {
-        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        UpdateScreenDebug(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
         while(SDL_PollEvent(&ev))
         {
 
@@ -416,14 +418,14 @@ void SDLProgram::RunMT()
 
         m_pthreadpool->WaitForAllCurrentTasks(m_maxthreads);
 
-	t = pixeldat;
-	pixeldat = pixeldat_backing;
-	pixeldat_backing = t;
+        t = pixeldat;
+        pixeldat = pixeldat_backing;
+        pixeldat_backing = t;
 
         /* End Draw Code */
 
         /* Update window surface with updated texture */
-        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        UpdateScreenDebug(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
 
         /* Poll for and handle GUI events */
         HandleInput(&ev);
@@ -530,6 +532,20 @@ inline void SDLProgram::UpdateScreen(void* pixeldat, unsigned int pitch)
 {
     SDL_UpdateTexture(m_pSurfaceTexture, 0, pixeldat, pitch);
     SDL_RenderCopy(m_pRenderer, m_pSurfaceTexture, 0, 0);
+    SDL_RenderPresent(m_pRenderer);
+}
+
+inline void SDLProgram::UpdateScreenDebug(void* pixeldat, unsigned int pitch)
+{
+    SDL_UpdateTexture(m_pSurfaceTexture, 0, pixeldat, pitch);
+    SDL_RenderCopy(m_pRenderer, m_pSurfaceTexture, 0, 0);
+    SDL_SetRenderDrawColor(m_pRenderer, 0, 0, 255, 128);
+    for(unsigned int idx = 0; idx < m_maxthreads; ++idx)
+    {
+        int y = idx * (m_screenheight / m_maxthreads);
+        SDL_RenderDrawLine(m_pRenderer, 0, y, m_screenwidth, y);
+    }
+
     SDL_RenderPresent(m_pRenderer);
 }
 
