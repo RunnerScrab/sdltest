@@ -468,10 +468,16 @@ void SDLProgram::RunST(unsigned int framelimit)
     this->Init();
 
     SDL_Event ev = {0};
+    printf("Buffer for %d pixels.\n", m_pixelcount);
+    unsigned int* pixeldat = (unsigned int*) malloc(sizeof(unsigned int)*m_pixelcount);
+    unsigned int* pixeldat_backing = (unsigned int*) malloc(sizeof(unsigned int)*m_pixelcount);
 
-    std::vector<unsigned int> pixeldat(m_pixelcount);
-    std::vector<unsigned int> pixeldat_backing(m_pixelcount);
+    if(!pixeldat || !pixeldat_backing)
+      printf("Allocation failure!");
 
+    memset(pixeldat, 0, sizeof(unsigned int) * m_pixelcount);
+    memset(pixeldat_backing, 0, sizeof(unsigned int) * m_pixelcount);
+    
     /* Create initial texture state */
 
     InitializeBoard(&pixeldat[0], 0xFEEDFACE, m_pixelcount);
@@ -498,6 +504,7 @@ void SDLProgram::RunST(unsigned int framelimit)
         }
     }
 
+    unsigned int* t = 0;
     m_stopwatch.Init();
     while(m_bRunning)
     {
@@ -505,18 +512,13 @@ void SDLProgram::RunST(unsigned int framelimit)
 
         for(unsigned int idx = 0; idx < m_pixelcount; ++idx)
         {
-            switch(m_logopt)
-            {
-            case 0:
                 life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth);
-                break;
-            default:
-                life((int*) &pixeldat[0], (int*) &pixeldat_backing[0], idx, m_screenheight, m_screenwidth, m_shamt);
-                break;
-            }
+
         }
 
-        pixeldat.swap(pixeldat_backing);
+	t = pixeldat;
+	pixeldat = pixeldat_backing;
+	pixeldat_backing = t;
 
         /* End Draw Code */
 
@@ -541,7 +543,8 @@ void SDLProgram::RunST(unsigned int framelimit)
 		m_bRunning = false;
 	}
     }
-
+    free(pixeldat_backing);
+    free(pixeldat);
     this->Teardown();
 }
 
