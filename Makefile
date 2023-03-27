@@ -1,4 +1,4 @@
-CXX = g++ -O3 -Wall
+CXX = g++ -g -Wall
 CXXFLAGS = -I /usr/include/SDL2
 LDLIBS = -lm -lSDL2
 INCLUDES = /usr/include/SDL2
