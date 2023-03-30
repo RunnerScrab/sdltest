@@ -478,9 +478,11 @@ void SDLProgram::RunST(unsigned int framelimit)
     unsigned int* pixeldat = (unsigned int*) malloc(sizeof(unsigned int)*m_pixelcount);
     unsigned int* pixeldat_backing = (unsigned int*) malloc(sizeof(unsigned int)*m_pixelcount);
 
-
     if(!pixeldat || !pixeldat_backing)
       printf("Allocation failure!");
+
+    memset(pixeldat, 0, sizeof(unsigned int) * m_pixelcount);
+    memset(pixeldat_backing, 0, sizeof(unsigned int) * m_pixelcount);
 
     memset(pixeldat, 0, sizeof(unsigned int) * m_pixelcount);
     memset(pixeldat_backing, 0, sizeof(unsigned int) * m_pixelcount);
