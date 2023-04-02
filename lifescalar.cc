@@ -19,7 +19,7 @@ void life(
     int rowUp = i - width;
     int rowDown = i + width;
 
-    bool outOfBounds = (row <= 0) || (row >= height - 1) || (col <= 0) || (col >= width) ;
+    bool outOfBounds = (row <= 0) || (row >= height) || (col <= 0) || (col >= width);
 
     if (!outOfBounds)
     {
