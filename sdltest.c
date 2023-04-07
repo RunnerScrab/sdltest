@@ -25,6 +25,8 @@
 
 #include "threadpool.h"
 
+#include "clgol.h"
+
 enum RunType {RT_ST, RT_NAIVEMT, RT_TP, RT_GPU};
 
 class SDLProgram
@@ -232,6 +234,110 @@ void SDLProgram::Run(unsigned int framelimit)
 
 void SDLProgram::RunGPU(unsigned int framelimit)
 {
+	printf("Running GPU mode!\n");
+    this->Init();
+	CLManager clm;
+	if(!clm.InitCL())
+		printf("CL Initialization Success\n");
+	if(!clm.CreateKernel())
+		printf("Kernel creation success\n");
+
+
+    unsigned int frame_counter = 0;
+
+    SDL_Event ev = {0};
+
+    unsigned int* pixeldat = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
+    unsigned int* pixeldat_backing = (unsigned int*) malloc(sizeof(unsigned int) * m_pixelcount);
+
+    memset(pixeldat, 0, sizeof(unsigned int) * m_pixelcount);
+    memset(pixeldat_backing, 0, sizeof(unsigned int) * m_pixelcount);
+    /* Create initial texture state */
+
+    if(clm.SetKernelArgs(m_pixelcount, m_screenwidth, m_screenheight) < 0)
+    {
+	    printf("FAILED TO SET KERNEL ARGUMENTS.\n");
+	    return;
+    }
+    InitializeBoard(&pixeldat[0], 0xFEEDFACE, m_pixelcount);
+
+    unsigned int segsize = m_pixelcount / m_maxthreads;
+
+    printf("Pixel count: %d Threads: %d Segment size: %d\n", m_pixelcount, m_maxthreads, segsize);
+    /* Initialize Thread Tasks */
+
+    while(!m_bRunning)
+    {
+        UpdateScreen(reinterpret_cast<void*>(&pixeldat[0]), 4*m_screenwidth);
+        while(SDL_PollEvent(&ev))
+        {
+
+            switch(ev.type)
+            {
+            case SDL_QUIT:
+                m_bRunning = false;
+                this->Teardown();
+                return;
+                break;
+            case SDL_KEYUP:
+                m_bRunning = true;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    m_stopwatch.Init();
+    unsigned int* t = 0;
+
+    if(clm.CopyBufferToGPUMem(pixeldat, m_pixelcount) < 0)
+    {
+	    printf("Failed to copy buffer to GPU memory!\n");
+	    return;
+    }
+    while(m_bRunning)
+    {
+
+        /* Begin Draw Code */
+	    if(clm.ComputeFrame() < 0)
+	    {
+		    printf("Compute frame FAILED.\n");
+		    return;
+	    }
+	    if(clm.CopyGPUMemToBuffer(pixeldat_backing, m_pixelcount) < 0)
+		    printf("Copy from GPU buffer failed!\n");
+
+        /* End Draw Code */
+        /* Update window surface with updated texture */
+        UpdateScreen(reinterpret_cast<void*>(&pixeldat_backing[0]), 4*m_screenwidth);
+
+	    t = pixeldat_backing;
+	    pixeldat_backing = pixeldat;
+	    pixeldat = t;
+
+        /* Poll for and handle GUI events */
+        HandleInput(&ev);
+        /* Compute FPS for this frame */
+        m_stopwatch.MarkTime();
+
+        if(!(frame_counter & 31))
+        {
+            UpdateDebugDisplay();
+            frame_counter = 0;
+        }
+        ++frame_counter;
+
+        if(framelimit && m_stopwatch.GetElapsedFrames() >= framelimit)
+        {
+            m_bRunning = false;
+        }
+    }
+
+    this->Teardown();
+
+    free(pixeldat_backing);
+    free(pixeldat);
 
 }
 

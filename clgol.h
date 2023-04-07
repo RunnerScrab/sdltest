@@ -12,6 +12,18 @@ public:
 	int InitCL();
 	int CreateKernel();
 	int SetKernelArgs(unsigned int, unsigned int, unsigned int);
+	int CopyBufferToGPUMem(unsigned int* buffer, unsigned int len);
+	int ComputeFrame();
+	int CopyGPUMemToBuffer(unsigned int* buffer, unsigned int len);
+	void SetInBuffer(unsigned int* buffer)
+	{
+		m_inbuffer = buffer;
+	}
+
+	void SetOutBuffer(unsigned int* buffer)
+	{
+		m_outbuffer = buffer;
+	}
 protected:
 
 private:
@@ -23,6 +35,12 @@ private:
 	std::vector<cl_platform_id> m_platforms;
 
 	cl_mem m_input, m_output;
+
+	size_t m_pixelcount = 0;
+	unsigned int m_width = 0, m_height = 0;
+
+	unsigned int* m_inbuffer, *m_outbuffer;
+
 };
 
 #endif /* CLGOL_H_ */

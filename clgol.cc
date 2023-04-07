@@ -39,14 +39,26 @@ CLManager::~CLManager()
 
 int CLManager::SetKernelArgs(unsigned int pixelcount, unsigned int width, unsigned int height)
 {
+	m_pixelcount = pixelcount;
+	m_width = width;
+	m_height =  height;
+
 	cl_int retval = 0;
 	m_input = clCreateBuffer(m_context, CL_MEM_READ_WRITE, sizeof(unsigned int) * pixelcount, 0, 0);
 	m_output = clCreateBuffer(m_context, CL_MEM_READ_WRITE, sizeof(unsigned int) * pixelcount, 0, 0);
+	if(!m_input || !m_output)
+	{
+		printf("Failure allocating CL buffers!\n");
+		return -1;
+	}
 
 	retval = clSetKernelArg(m_kernel, 0, sizeof(cl_mem), &m_input);
-	retval |= clSetKernelArg(m_kernel, 1, sizeof(cl_mem), &m_output);
-	retval |= clSetKernelArg(m_kernel, 2, sizeof(unsigned int), &height);
-	retval |= clSetKernelArg(m_kernel, 3, sizeof(unsigned int), &width);
+	if(CL_SUCCESS != retval) return -1;
+	retval = clSetKernelArg(m_kernel, 1, sizeof(cl_mem), &m_output);
+	if(CL_SUCCESS != retval) return -1;
+	retval = clSetKernelArg(m_kernel, 2, sizeof(unsigned int), &m_height);
+	if(CL_SUCCESS != retval) return -1;
+	retval = clSetKernelArg(m_kernel, 3, sizeof(unsigned int), &m_width);
 
 	return retval == CL_SUCCESS ? 0 : -1;
 }
@@ -93,6 +105,46 @@ clean_and_return:
 	return retval == CL_SUCCESS ? 0 : -1;
 }
 
+int CLManager::CopyBufferToGPUMem(unsigned int* buffer, unsigned int len)
+{
+
+	cl_int retval = clEnqueueWriteBuffer(m_queue, m_input, CL_TRUE, 0, sizeof(unsigned int) * len, buffer, 0, 0, 0);
+	return retval == CL_SUCCESS ? 0 : -1;
+}
+
+int CLManager::CopyGPUMemToBuffer(unsigned int* buffer, unsigned int len)
+{
+	cl_int retval = clEnqueueReadBuffer(m_queue, m_output, CL_TRUE, 0, sizeof(unsigned int) * len, buffer, 0, 0, 0);
+	return retval == CL_SUCCESS ? 0 : -1;
+}
+
+
+int CLManager::ComputeFrame()
+{
+	size_t workgroupsize = 0;
+	cl_int retval = 0;
+
+	retval = clGetKernelWorkGroupInfo(m_kernel, m_deviceid, CL_KERNEL_WORK_GROUP_SIZE,
+						 sizeof(size_t), &workgroupsize, 0);
+	if(CL_SUCCESS != retval)
+	{
+		printf("Failed to get Kernel Workgroup Info!\n");
+		return -1;
+	}
+	size_t globalworksize[1] = {m_pixelcount};
+	size_t localworksize[1] = {1};
+	retval = clEnqueueNDRangeKernel(m_queue, m_kernel, 1, 0,
+					(const size_t*) &globalworksize, (const size_t*) &localworksize, 0, 0, 0);
+	if(CL_SUCCESS != retval)
+	{
+		printf("Error %d with Enqueue: %d pixelcount, %d workgroup size\n", retval, m_pixelcount, workgroupsize);
+		return -1;
+	}
+
+	retval = clEnqueueCopyBuffer(m_queue, m_output, m_input, 0, 0, sizeof(unsigned int) * m_pixelcount, 0, 0, 0);
+	return CL_SUCCESS == retval ? 0 : -1;
+}
+
 int CLManager::InitCL()
 {
 	cl_uint numplatforms = 0;
@@ -137,8 +189,4 @@ int CLManager::InitCL()
 
 CLManager::CLManager()
 {
-	if(!InitCL())
-		printf("CL Initialization success.\n");
-	if(!CreateKernel())
-	   printf("Kernel compilation succeeded.\n");
 }
