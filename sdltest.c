@@ -25,16 +25,19 @@
 
 #include "threadpool.h"
 
+enum RunType {RT_ST, RT_NAIVEMT, RT_TP, RT_GPU};
+
 class SDLProgram
 {
 public:
-    SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bMTNaive, bool bVsync = true);
+	SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, RunType rt, bool bVsync = true);
     ~SDLProgram();
     bool CreateWindow();
     void Run(unsigned int framelimit);
     void RunST(unsigned int framelimit);
     void RunMT(unsigned int framelimit);
     void RunMTNaive(unsigned int framelimit);
+    void RunGPU(unsigned int framelimit);
     void WriteData(const char* path);
 protected:
     void Init();
@@ -56,7 +59,9 @@ private:
 
     unsigned int m_screenwidth = 0, m_screenheight = 0;
     unsigned int m_pixelcount = 0;
-    bool m_bVsync, m_bMTNaive;
+
+    RunType m_runtype = RT_ST;
+    bool m_bVsync;
 
     unsigned int m_maxthreads;
 
@@ -205,17 +210,29 @@ void SDLProgram::InitializeBoard(unsigned int* pixeldat, unsigned int seed, unsi
 
 void SDLProgram::Run(unsigned int framelimit)
 {
-    if(m_maxthreads > 1)
-    {
-        if(!m_bMTNaive)
-            RunMT(framelimit);
-        else
-            RunMTNaive(framelimit);
-    }
-    else
-    {
-        RunST(framelimit);
-    }
+	    switch(m_runtype)
+	    {
+	    case RT_ST:
+		    m_maxthreads = 1;
+		    RunST(framelimit);
+		    break;
+	    case RT_NAIVEMT:
+		    RunMTNaive(framelimit);
+		    break;
+	    case RT_TP:
+		    RunMT(framelimit);
+		    break;
+	    case RT_GPU:
+		    RunGPU(framelimit);
+		    break;
+	    default:
+		    break;
+	    }
+}
+
+void SDLProgram::RunGPU(unsigned int framelimit)
+{
+
 }
 
 struct LifeThreadPackage
@@ -598,9 +615,9 @@ inline void SDLProgram::UpdateDebugDisplayST()
 }
 
 
-SDLProgram::SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, bool bMTNaive, bool bVsync) :
+SDLProgram::SDLProgram(unsigned int width, unsigned int height, unsigned int maxthreads, RunType rt, bool bVsync) :
     m_screenwidth(width), m_screenheight(height),
-    m_bVsync(bVsync), m_bMTNaive(bMTNaive), m_maxthreads(maxthreads), m_pthreadpool(0)
+	    m_runtype(rt), m_bVsync(bVsync), m_maxthreads(maxthreads), m_pthreadpool(0)
 {
     m_pixelcount = width * height;
     float l2 = log2(width);
@@ -640,7 +657,7 @@ int main(int argc, char** argv)
     SDLLibraryHelper sdl;
     bool result = sdl.InitLibrary();
     int threads = 1;
-    bool bMTNaive = false;
+    RunType rt = RT_ST;
     if(argc >= 2)
     {
         printf("%s\n", argv[1]);
@@ -649,8 +666,22 @@ int main(int argc, char** argv)
 
     if(argc >= 3)
     {
-        bMTNaive = argv[2][0] == 'n';
-        printf("Running Naive MT implementation.\n");
+	    switch(argv[2][0])
+	    {
+
+	    case 'n':
+		    rt = RT_NAIVEMT;
+		    break;
+	    case 'g':
+		    rt = RT_GPU;
+		    break;
+	    case 't':
+		    rt = RT_TP;
+		    break;
+	    default:
+		    break;
+	    }
+
     }
 
     printf("Statically linked SDL version is %s.\n", sdl.GetStaticVerStr());
@@ -660,13 +691,13 @@ int main(int argc, char** argv)
            result ? "success" : "failure");
 
     //SDLProgram prog(1920, 1040, ThreadPool::GetMaxThreads(), false);
-    SDLProgram prog(1280, 680, threads, bMTNaive, false);
+    SDLProgram prog(1280, 680, threads, rt, false);
     prog.CreateWindow();
     prog.Run(10000);
 
     SDL_Quit();
     char filename[64] = {0};
-    snprintf(filename, 64, "%sfps_%d.dat", bMTNaive ? "n" : "t", threads);
+    snprintf(filename, 64, "%sfps_%d.dat", rt == RT_ST ? "s" : rt == RT_NAIVEMT ? "n" : rt == RT_GPU ? "g" : "t", threads);
     prog.WriteData(filename);
     return 0;
 }
