@@ -37,8 +37,11 @@ CLManager::~CLManager()
 		clReleaseKernel(m_kernel);
 }
 
-int CLManager::SetKernelArgs(unsigned int pixelcount, unsigned int width, unsigned int height)
+int CLManager::SetKernelArgs(unsigned int* inbuf, unsigned int* outbuf,
+			     unsigned int pixelcount, unsigned int width, unsigned int height)
 {
+	m_inbuffer = inbuf;
+	m_outbuffer = outbuf;
 	m_pixelcount = pixelcount;
 	m_width = width;
 	m_height =  height;
@@ -61,6 +64,15 @@ int CLManager::SetKernelArgs(unsigned int pixelcount, unsigned int width, unsign
 	retval = clSetKernelArg(m_kernel, 3, sizeof(unsigned int), &m_width);
 
 	return retval == CL_SUCCESS ? 0 : -1;
+}
+
+void* CLManager::GetMappedRegion()
+{
+//CL_MAP_READ
+	void* retval =
+	clEnqueueMapBuffer(m_queue, m_output, CL_TRUE, CL_MAP_READ, 0,
+			  m_width*m_height*4, 0, 0, 0, 0);
+	return retval;
 }
 
 int CLManager::CreateKernel()
@@ -123,7 +135,7 @@ int CLManager::ComputeFrame()
 {
 	size_t workgroupsize = 0;
 	cl_int retval = 0;
-
+/*
 	retval = clGetKernelWorkGroupInfo(m_kernel, m_deviceid, CL_KERNEL_WORK_GROUP_SIZE,
 						 sizeof(size_t), &workgroupsize, 0);
 	if(CL_SUCCESS != retval)
@@ -131,17 +143,22 @@ int CLManager::ComputeFrame()
 		printf("Failed to get Kernel Workgroup Info!\n");
 		return -1;
 	}
+*/
 	size_t globalworksize[1] = {m_pixelcount};
 	size_t localworksize[1] = {1};
 	retval = clEnqueueNDRangeKernel(m_queue, m_kernel, 1, 0,
 					(const size_t*) &globalworksize, (const size_t*) &localworksize, 0, 0, 0);
-	if(CL_SUCCESS != retval)
+	/* if(CL_SUCCESS != retval)
 	{
 		printf("Error %d with Enqueue: %d pixelcount, %d workgroup size\n", retval, m_pixelcount, workgroupsize);
 		return -1;
-	}
+		}*/
 
-	retval = clEnqueueCopyBuffer(m_queue, m_output, m_input, 0, 0, sizeof(unsigned int) * m_pixelcount, 0, 0, 0);
+	retval = clSetKernelArg(m_kernel, bPingPong ? 0 : 1, sizeof(cl_mem), &m_input);
+	retval = clSetKernelArg(m_kernel, bPingPong ? 1 : 0, sizeof(cl_mem), &m_output);
+	bPingPong = !bPingPong;
+
+	//retval = clEnqueueCopyBuffer(m_queue, m_output, m_input, 0, 0, sizeof(unsigned int) * m_pixelcount, 0, 0, 0);
 	return CL_SUCCESS == retval ? 0 : -1;
 }
 

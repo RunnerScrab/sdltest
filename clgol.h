@@ -11,19 +11,11 @@ public:
 	~CLManager();
 	int InitCL();
 	int CreateKernel();
-	int SetKernelArgs(unsigned int, unsigned int, unsigned int);
+	int SetKernelArgs(unsigned int*, unsigned int*, unsigned int, unsigned int, unsigned int);
 	int CopyBufferToGPUMem(unsigned int* buffer, unsigned int len);
 	int ComputeFrame();
 	int CopyGPUMemToBuffer(unsigned int* buffer, unsigned int len);
-	void SetInBuffer(unsigned int* buffer)
-	{
-		m_inbuffer = buffer;
-	}
-
-	void SetOutBuffer(unsigned int* buffer)
-	{
-		m_outbuffer = buffer;
-	}
+	void* GetMappedRegion();
 protected:
 
 private:
@@ -40,7 +32,7 @@ private:
 	unsigned int m_width = 0, m_height = 0;
 
 	unsigned int* m_inbuffer, *m_outbuffer;
-
+	bool bPingPong = false;
 };
 
 #endif /* CLGOL_H_ */

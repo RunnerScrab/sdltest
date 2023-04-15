@@ -215,16 +215,20 @@ void SDLProgram::Run(unsigned int framelimit)
 	    switch(m_runtype)
 	    {
 	    case RT_ST:
+		    printf("Running on single thread\n");
 		    m_maxthreads = 1;
 		    RunST(framelimit);
 		    break;
 	    case RT_NAIVEMT:
+		    printf("Running %d threads NAIVE\n", m_maxthreads);
 		    RunMTNaive(framelimit);
 		    break;
 	    case RT_TP:
+		    printf("Running %d threads THREADPOOL\n", m_maxthreads);
 		    RunMT(framelimit);
 		    break;
 	    case RT_GPU:
+		    printf("Running on GPU\n");
 		    RunGPU(framelimit);
 		    break;
 	    default:
@@ -254,7 +258,7 @@ void SDLProgram::RunGPU(unsigned int framelimit)
     memset(pixeldat_backing, 0, sizeof(unsigned int) * m_pixelcount);
     /* Create initial texture state */
 
-    if(clm.SetKernelArgs(m_pixelcount, m_screenwidth, m_screenheight) < 0)
+    if(clm.SetKernelArgs(pixeldat, pixeldat_backing, m_pixelcount, m_screenwidth, m_screenheight) < 0)
     {
 	    printf("FAILED TO SET KERNEL ARGUMENTS.\n");
 	    return;
@@ -296,6 +300,7 @@ void SDLProgram::RunGPU(unsigned int framelimit)
 	    printf("Failed to copy buffer to GPU memory!\n");
 	    return;
     }
+
     while(m_bRunning)
     {
 
@@ -305,16 +310,12 @@ void SDLProgram::RunGPU(unsigned int framelimit)
 		    printf("Compute frame FAILED.\n");
 		    return;
 	    }
-	    if(clm.CopyGPUMemToBuffer(pixeldat_backing, m_pixelcount) < 0)
-		    printf("Copy from GPU buffer failed!\n");
+	    clm.CopyGPUMemToBuffer(pixeldat_backing, m_pixelcount);
 
         /* End Draw Code */
-        /* Update window surface with updated texture */
-        UpdateScreen(reinterpret_cast<void*>(&pixeldat_backing[0]), 4*m_screenwidth);
 
-	    t = pixeldat_backing;
-	    pixeldat_backing = pixeldat;
-	    pixeldat = t;
+        /* Update window surface with updated texture */
+	UpdateScreen((void*) pixeldat_backing, 4*m_screenwidth);
 
         /* Poll for and handle GUI events */
         HandleInput(&ev);
